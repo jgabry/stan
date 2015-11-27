@@ -45,6 +45,7 @@
 
 #include <gtest/gtest.h>
 #include <test/test-models/performance/logistic.hpp>
+#include <stan/version.hpp>
 #include <ctime>
 #include <test/performance/utility.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -83,18 +84,15 @@ using stan::test::performance::get_git_date;
 using stan::test::performance::get_date;
 
 TEST_F(performance, run) {
-  const int argc = 11;
-  const char* argv[] = {"logistic", 
-                        "sample", "num_samples=10000", 
-                        "init=0", 
-                        "random", "seed=0",
-                        "data", "file=src/test/test-models/performance/logistic.data.R",
-                        "output", "refresh=10000", "file=test/performance/logistic_output.csv"};
-  
   clock_t t;
   for (int n = 0; n < N; ++n) {
+    std::cout << "iteration: " << n << " / " << N << std::endl;
     t = clock();      // start timer
-    stan::services::command<stan_model>(argc, argv);
+    stan::test::performance::command<stan_model>(1000,
+                                                 10000,
+                                                 "src/test/test-models/performance/logistic.data.R",
+                                                 "test/performance/logistic_output.csv",
+                                                 0U);
     t = clock() - t;  // end timer
     seconds_per_run[n] = static_cast<double>(t) / CLOCKS_PER_SEC; 
     last_draws_per_run[n] 
@@ -110,28 +108,28 @@ TEST_F(performance, values_from_tagged_version) {
     << "last tagged version, 2.5.0, had " << N_values << " elements";
   
   std::vector<double> first_run = last_draws_per_run[0];
-  EXPECT_FLOAT_EQ(-67.5276, first_run[0])
+  EXPECT_FLOAT_EQ(-65.9431, first_run[0])
     << "lp__: index 0";
 
-  EXPECT_FLOAT_EQ(0.773672, first_run[1])
+  EXPECT_FLOAT_EQ(0.99914801, first_run[1])
     << "accept_stat__: index 1";
 
-  EXPECT_FLOAT_EQ(0.901013, first_run[2])
+  EXPECT_FLOAT_EQ(0.92122698, first_run[2])
     << "stepsize__: index 2";
 
-  EXPECT_FLOAT_EQ(2, first_run[3])
+  EXPECT_FLOAT_EQ(3, first_run[3])
     << "treedepth__: index 3";
 
-  EXPECT_FLOAT_EQ(3, first_run[4])
+  EXPECT_FLOAT_EQ(7, first_run[4])
     << "n_leapfrog__: index 4";
 
   EXPECT_FLOAT_EQ(0, first_run[5])
     << "n_divergent__: index 5";
 
-  EXPECT_FLOAT_EQ(1.71115, first_run[6])
+  EXPECT_FLOAT_EQ(1.4754699, first_run[6])
     << "beta.1: index 6";
 
-  EXPECT_FLOAT_EQ(-0.291085, first_run[7])
+  EXPECT_FLOAT_EQ(-0.79085201, first_run[7])
     << "beta.2: index 7";
   
   matches_tagged_version = !HasNonfatalFailure();
@@ -152,6 +150,44 @@ TEST_F(performance, values_same_run_to_run) {
   all_values_same = !HasNonfatalFailure();
 }
 
+TEST_F(performance, check_output_is_same) {
+  std::ifstream file_stream;
+  file_stream.open("test/performance/logistic_output.csv", 
+                   std::ios_base::in);
+  ASSERT_TRUE(file_stream.good());
+
+  std::string line, expected;
+
+  getline(file_stream, line);
+  expected = "# stan_version_major = " + stan::MAJOR_VERSION; 
+  ASSERT_EQ(expected, line);
+  ASSERT_TRUE(file_stream.good());
+
+
+  getline(file_stream, line);
+  expected = "# stan_version_minor = " + stan::MINOR_VERSION; 
+  ASSERT_EQ(expected, line);
+  ASSERT_TRUE(file_stream.good());
+
+  getline(file_stream, line);
+  expected = "# stan_version_patch = " + stan::PATCH_VERSION; 
+  ASSERT_EQ(expected, line);
+  ASSERT_TRUE(file_stream.good());
+
+  getline(file_stream, line);
+  ASSERT_EQ("# model = logistic_model", line);
+  ASSERT_TRUE(file_stream.good());
+
+  getline(file_stream, line);
+  ASSERT_EQ("lp__,accept_stat__,stepsize__,treedepth__,n_leapfrog__,n_divergent__,beta.1,beta.2", line);
+  ASSERT_TRUE(file_stream.good());
+
+  getline(file_stream, line);
+  ASSERT_EQ("# Adaptation terminated", line);
+  ASSERT_TRUE(file_stream.good());
+
+  file_stream.close();
+}
 
 TEST_F(performance, write_results_to_disk) {
   std::stringstream header;

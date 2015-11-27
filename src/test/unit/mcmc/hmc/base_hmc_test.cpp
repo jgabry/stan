@@ -3,7 +3,7 @@
 
 #include <boost/random/additive_combine.hpp>
 #include <boost/algorithm/string/split.hpp>
-
+#include <test/unit/util.hpp>
 #include <gtest/gtest.h>
 
 typedef boost::ecuyer1988 rng_t;
@@ -14,7 +14,6 @@ namespace stan {
   namespace mcmc {
     
     class mock_hmc: public base_hmc<mock_model,
-                                    ps_point,
                                     mock_hamiltonian,
                                     mock_integrator,
                                     rng_t> {
@@ -22,7 +21,7 @@ namespace stan {
     public:
       
       mock_hmc(mock_model& m, rng_t& rng, std::ostream* o, std::ostream* e) : 
-        base_hmc<mock_model,ps_point,mock_hamiltonian,mock_integrator,rng_t>
+        base_hmc<mock_model,mock_hamiltonian,mock_integrator,rng_t>
         (m, rng, o, e)
       { this->name_ = "Mock HMC"; }
       
@@ -87,7 +86,6 @@ TEST(McmcBaseHMC, seed) {
 }
 
 TEST(McmcBaseHMC, set_nominal_stepsize) {
-  
   rng_t base_rng(0);
   
   Eigen::VectorXd q(2);
@@ -111,7 +109,6 @@ TEST(McmcBaseHMC, set_nominal_stepsize) {
 }
 
 TEST(McmcBaseHMC, set_stepsize_jitter) {
-  
   rng_t base_rng(0);
   
   Eigen::VectorXd q(2);
@@ -134,3 +131,35 @@ TEST(McmcBaseHMC, set_stepsize_jitter) {
   EXPECT_EQ("", error.str());
 }
 
+
+TEST(McmcBaseHMC, streams) {
+  stan::test::capture_std_streams();
+  
+  rng_t base_rng(0);
+  
+  Eigen::VectorXd q(2);
+  q(0) = 5;
+  q(1) = 1;
+  
+  stan::mcmc::mock_model model(q.size());  
+
+  std::stringstream output, error;
+  EXPECT_NO_THROW(stan::mcmc::mock_hmc sampler(model, base_rng, &output, &error));
+  EXPECT_EQ("", output.str());
+  EXPECT_EQ("", error.str());
+  
+  EXPECT_NO_THROW(stan::mcmc::mock_hmc sampler(model, base_rng, 0, 0));
+  
+  
+  stan::mcmc::mock_hmc sampler(model, base_rng, 0, 0);
+  EXPECT_NO_THROW(sampler.write_sampler_state(0));
+
+  output.str("");
+  EXPECT_NO_THROW(sampler.write_sampler_state(&output));
+  EXPECT_EQ("# Step size = 0.1\n# No free parameters for unit metric\n",
+            output.str());
+  
+  stan::test::reset_std_streams();
+  EXPECT_EQ("", stan::test::cout_ss.str());
+  EXPECT_EQ("", stan::test::cerr_ss.str());
+}

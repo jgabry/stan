@@ -1,9 +1,12 @@
 #include <stan/services/mcmc/warmup.hpp>
 #include <gtest/gtest.h>
 #include <test/test-models/good/services/test_lp.hpp>
+#include <stan/interface_callbacks/writer/stream_writer.hpp>
+#include <boost/random/additive_combine.hpp>
 #include <sstream>
 
 typedef boost::ecuyer1988 rng_t;
+typedef stan::interface_callbacks::writer::stream_writer writer_t;
 
 class mock_sampler : public stan::mcmc::base_mcmc {
 public:
@@ -47,15 +50,15 @@ public:
     
     model = new stan_model(empty_data_context, &model_output);
     
-    stan::interface::recorder::csv sample_recorder(&sample_output, "# ");
-    stan::interface::recorder::csv diagnostic_recorder(&diagnostic_output, "# ");
-    stan::interface::recorder::messages message_recorder(&message_output, "# ");
+    writer_t sample_writer(sample_output, "# ");
+    writer_t diagnostic_writer(diagnostic_output, "# ");
+    writer_t message_writer(message_output, "# ");
 
-    writer = new stan::io::mcmc_writer<stan_model,
-                                       stan::interface::recorder::csv,
-                                       stan::interface::recorder::csv,
-                                       stan::interface::recorder::messages>
-      (sample_recorder, diagnostic_recorder, message_recorder, &writer_output);
+    writer = new stan::services::sample::mcmc_writer<stan_model,
+                                                     writer_t,
+                                                     writer_t,
+                                                     writer_t>
+      (sample_writer, diagnostic_writer, message_writer, &writer_output);
 
     base_rng.seed(123456);
 
@@ -71,10 +74,10 @@ public:
   
   mock_sampler* sampler;
   stan_model* model;
-  stan::io::mcmc_writer<stan_model,
-                        stan::interface::recorder::csv,
-                        stan::interface::recorder::csv,
-                        stan::interface::recorder::messages>* writer;
+  stan::services::sample::mcmc_writer<stan_model,
+                                      writer_t,
+                                      writer_t,
+                                      writer_t>* writer;
   rng_t base_rng;
 
   Eigen::VectorXd q;

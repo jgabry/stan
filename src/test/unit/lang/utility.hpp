@@ -52,7 +52,8 @@ bool is_parsable(const std::string& file_name,
   stan::lang::program prog;
   std::ifstream fs(file_name.c_str());
   std::string model_name = file_name_to_model_name(file_name);
-  bool parsable = stan::lang::parse(msgs, fs, file_name, model_name, prog);
+  bool parsable
+    = stan::lang::parse(msgs, fs, file_name, model_name, prog);             
   return parsable;
 }
 
@@ -87,6 +88,7 @@ void test_parsable(const std::string& model_name) {
 }
 
 
+
 /** test that model with specified name in folder "bad" throws
  * an exception containing the second arg as a substring
  *
@@ -112,8 +114,30 @@ void test_throws(const std::string& model_name, const std::string& error_msg) {
   }
   
   FAIL() << "model name=" << model_name 
-         << " is parsable and were exepecting msg=" << error_msg
+         << " is parsable and were expecting msg=" << error_msg
          << std::endl;
+}
+
+/**
+ * Same as test_throws() but for two messages.
+ */
+void test_throws(const std::string& model_name, 
+                 const std::string& error_msg1,
+                 const std::string& error_msg2) {
+  test_throws(model_name, error_msg1);
+  test_throws(model_name, error_msg2);
+}
+
+/**
+ * Same as test_throws() but for three messages.
+ */
+void test_throws(const std::string& model_name, 
+                 const std::string& error_msg1,
+                 const std::string& error_msg2,
+                 const std::string& error_msg3) {
+  test_throws(model_name, error_msg1);
+  test_throws(model_name, error_msg2);
+  test_throws(model_name, error_msg3);
 }
 
 /** test that model with specified name in good path parses
@@ -122,10 +146,16 @@ void test_throws(const std::string& model_name, const std::string& error_msg) {
  * @param model_name Name of model to parse
  * @param msg Substring of warning message expected.
  */
-void test_warning(const std::string& model_name, const std::string& warning_msg) {
+void test_warning(const std::string& model_name, 
+                  const std::string& warning_msg) {
   std::stringstream msgs;
   EXPECT_TRUE(is_parsable_folder(model_name, "good", &msgs));
-  EXPECT_TRUE(msgs.str().find_first_of(warning_msg) != std::string::npos);
+  bool found = msgs.str().find(warning_msg) != std::string::npos;
+  EXPECT_TRUE(found) << std::endl 
+    << "FOUND: " << msgs.str() 
+    << std::endl
+    << "EXPECTED (as substring): " << warning_msg
+    << std::endl;
 }
 
 std::string model_to_cpp(const std::string& model_text) {
@@ -145,11 +175,8 @@ std::string model_to_cpp(const std::string& model_text) {
 
 void expect_matches(int n,
                     const std::string& stan_code,
-                    const std::string& target,
-                    bool print_model = false) {
+                    const std::string& target) {
   std::string model_cpp = model_to_cpp(stan_code);
-  if (print_model)
-    std::cout << model_cpp << std::endl;
   EXPECT_EQ(n, count_matches(target,model_cpp));
 }
 

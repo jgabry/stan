@@ -4,17 +4,18 @@
 #include <boost/variant/apply_visitor.hpp>
 #include <boost/variant/recursive_variant.hpp>
 
+#include <stan/lang/ast.hpp>
+
 #include <cstddef>
 #include <limits>
 #include <climits>
 #include <iostream>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include <stan/lang/ast.hpp>
 
 namespace stan {
 
@@ -72,23 +73,23 @@ namespace stan {
     }
     bool expr_type::operator<(const expr_type& et) const {
       return (base_type_ < et.base_type_)
-        || ( base_type_ == et.base_type_
-             && num_dims_ < et.num_dims_ );
+        || (base_type_ == et.base_type_
+            && num_dims_ < et.num_dims_);
     }
     bool expr_type::operator<=(const expr_type& et) const {
       return (base_type_ < et.base_type_)
-        || ( base_type_ == et.base_type_
-             && num_dims_ <= et.num_dims_ );
+        || (base_type_ == et.base_type_
+            && num_dims_ <= et.num_dims_);
     }
     bool expr_type::operator>(const expr_type& et) const {
       return (base_type_ > et.base_type_)
-        || ( base_type_ == et.base_type_
-             && num_dims_ > et.num_dims_ );
+        || (base_type_ == et.base_type_
+            && num_dims_ > et.num_dims_);
     }
     bool expr_type::operator>=(const expr_type& et) const {
       return (base_type_ > et.base_type_)
-        || ( base_type_ == et.base_type_
-             && num_dims_ >= et.num_dims_ );
+        || (base_type_ == et.base_type_
+            && num_dims_ >= et.num_dims_);
     }
     bool expr_type::is_primitive() const {
       return is_primitive_int()
@@ -117,7 +118,7 @@ namespace stan {
 
     // output matches unsized types used to declare functions
     std::ostream& operator<<(std::ostream& o, const expr_type& et) {
-      write_base_expr_type(o,et.type());
+      write_base_expr_type(o, et.type());
       if (et.num_dims() > 0) {
         o << '[';
         for (size_t i = 1; i < et.num_dims(); ++i)
@@ -176,20 +177,19 @@ namespace stan {
     void function_signatures::add(const std::string& name,
                                    const expr_type& result_type,
                                    const std::vector<expr_type>& arg_types) {
-      sigs_map_[name].push_back(function_signature_t(result_type,arg_types));
-
+      sigs_map_[name].push_back(function_signature_t(result_type, arg_types));
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type) {
       std::vector<expr_type> arg_types;
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type,
                                   const expr_type& arg_type) {
       std::vector<expr_type> arg_types;
       arg_types.push_back(arg_type);
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type,
@@ -198,7 +198,7 @@ namespace stan {
       std::vector<expr_type> arg_types;
       arg_types.push_back(arg_type1);
       arg_types.push_back(arg_type2);
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type,
@@ -209,7 +209,7 @@ namespace stan {
       arg_types.push_back(arg_type1);
       arg_types.push_back(arg_type2);
       arg_types.push_back(arg_type3);
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type,
@@ -222,7 +222,7 @@ namespace stan {
       arg_types.push_back(arg_type2);
       arg_types.push_back(arg_type3);
       arg_types.push_back(arg_type4);
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type,
@@ -237,7 +237,7 @@ namespace stan {
       arg_types.push_back(arg_type3);
       arg_types.push_back(arg_type4);
       arg_types.push_back(arg_type5);
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type,
@@ -254,7 +254,7 @@ namespace stan {
       arg_types.push_back(arg_type4);
       arg_types.push_back(arg_type5);
       arg_types.push_back(arg_type6);
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add(const std::string& name,
                                   const expr_type& result_type,
@@ -273,28 +273,28 @@ namespace stan {
       arg_types.push_back(arg_type5);
       arg_types.push_back(arg_type6);
       arg_types.push_back(arg_type7);
-      add(name,result_type,arg_types);
+      add(name, result_type, arg_types);
     }
     void function_signatures::add_nullary(const::std::string& name) {
-      add(name,DOUBLE_T);
+      add(name, DOUBLE_T);
     }
     void function_signatures::add_unary(const::std::string& name) {
-      add(name,DOUBLE_T,DOUBLE_T);
+      add(name, DOUBLE_T, DOUBLE_T);
     }
     void function_signatures::add_binary(const::std::string& name) {
-      add(name,DOUBLE_T,DOUBLE_T,DOUBLE_T);
+      add(name, DOUBLE_T, DOUBLE_T, DOUBLE_T);
     }
     void function_signatures::add_ternary(const::std::string& name) {
-      add(name,DOUBLE_T,DOUBLE_T,DOUBLE_T,DOUBLE_T);
+      add(name, DOUBLE_T, DOUBLE_T, DOUBLE_T, DOUBLE_T);
     }
     void function_signatures::add_quaternary(const::std::string& name) {
-      add(name,DOUBLE_T,DOUBLE_T,DOUBLE_T,DOUBLE_T,DOUBLE_T);
+      add(name, DOUBLE_T, DOUBLE_T, DOUBLE_T, DOUBLE_T, DOUBLE_T);
     }
     int function_signatures::num_promotions(
                             const std::vector<expr_type>& call_args,
                             const std::vector<expr_type>& sig_args) {
       if (call_args.size() != sig_args.size()) {
-        return -1; // failure
+        return -1;  // failure
       }
       int num_promotions = 0;
       for (size_t i = 0; i < call_args.size(); ++i) {
@@ -304,7 +304,7 @@ namespace stan {
                    && sig_args[i].is_primitive_double()) {
           ++num_promotions;
         } else {
-          return -1; // failed match
+          return -1;  // failed match
         }
       }
       return num_promotions;
@@ -312,14 +312,13 @@ namespace stan {
     int function_signatures::get_signature_matches(const std::string& name,
                               const std::vector<expr_type>& args,
                               function_signature_t& signature) {
-
       std::vector<function_signature_t> signatures = sigs_map_[name];
       size_t min_promotions = std::numeric_limits<size_t>::max();
       size_t num_matches = 0;
       for (size_t i = 0; i < signatures.size(); ++i) {
         signature = signatures[i];
-        int promotions = num_promotions(args,signature.second);
-        if (promotions < 0) continue; // no match
+        int promotions = num_promotions(args, signature.second);
+        if (promotions < 0) continue;  // no match
         size_t promotions_ui = static_cast<size_t>(promotions);
         if (promotions_ui < min_promotions) {
           min_promotions = promotions_ui;
@@ -331,18 +330,110 @@ namespace stan {
       return num_matches;
     }
 
-    expr_type function_signatures::get_result_type(
-                                         const std::string& name,
-                                         const std::vector<expr_type>& args,
-                                         std::ostream& error_msgs) {
+    bool is_binary_operator(const std::string& name) {
+      return name == "add"
+        || name == "subtract"
+        || name == "multiply"
+        || name == "divide"
+        || name == "modulus"
+        || name == "mdivide_left"
+        || name == "mdivide_right"
+        || name == "elt_multiply"
+        || name == "elt_divide";
+    }
+
+    bool is_unary_operator(const std::string& name) {
+      return name == "minus"
+        || name == "logical_negation";
+    }
+
+    bool is_unary_postfix_operator(const std::string& name) {
+      return name == "transpose";
+    }
+
+    bool is_operator(const std::string& name) {
+      return is_binary_operator(name)
+        || is_unary_operator(name)
+        || is_unary_postfix_operator(name);
+    }
+
+    std::string fun_name_to_operator(const std::string& name) {
+      // binary infix (pow handled by parser)
+      if (name == "add") return "+";
+      if (name == "subtract") return "-";
+      if (name == "multiply") return "*";
+      if (name == "divide") return "/";
+      if (name == "modulus") return "%";
+      if (name == "mdivide_left") return "\\";
+      if (name == "mdivide_right") return "/";
+      if (name == "elt_multiply") return ".*";
+      if (name == "elt_divide") return "./";
+
+      // unary prefix (+ handled by parser)
+      if (name == "minus") return "-";
+      if (name == "logical_negation") return "!";
+
+      // unary suffix
+      if (name == "transpose") return "'";
+
+      // none of the above
+      return "ERROR";
+    }
+
+    void print_signature(const std::string& name,
+                         const std::vector<expr_type>& arg_types,
+                         bool sampling_error_style,
+                         std::ostream& msgs) {
+      static size_t OP_SIZE = std::string("operator").size();
+      msgs << "  ";
+      if (name.size() > OP_SIZE && name.substr(0, OP_SIZE) == "operator") {
+        std::string operator_name = name.substr(OP_SIZE);
+        if (arg_types.size() == 2) {
+          msgs << arg_types[0] << " " << operator_name << " " << arg_types[1]
+               << std::endl;
+          return;
+        } else if (arg_types.size() == 1) {
+          if (operator_name == "'")  // exception for postfix
+            msgs << arg_types[0] << operator_name << std::endl;
+          else
+            msgs << operator_name << arg_types[0] << std::endl;
+          return;
+        } else {
+          // should not be reachable due to operator grammar
+          // continue on purpose to get more info to user if this happens
+          msgs << "Operators must have 1 or 2 arguments." << std::endl;
+        }
+      }
+      if (sampling_error_style && arg_types.size() > 0)
+        msgs << arg_types[0] << " ~ ";
+      msgs << name << "(";
+      size_t start = sampling_error_style ? 1 : 0;
+      for (size_t j = start; j < arg_types.size(); ++j) {
+        if (j > start) msgs << ", ";
+        msgs << arg_types[j];
+      }
+      msgs << ")" << std::endl;
+    }
+
+    expr_type function_signatures::get_result_type(const std::string& name,
+                                           const std::vector<expr_type>& args,
+                                           std::ostream& error_msgs,
+                                           bool sampling_error_style) {
       std::vector<function_signature_t> signatures = sigs_map_[name];
       size_t match_index = 0;
       size_t min_promotions = std::numeric_limits<size_t>::max();
       size_t num_matches = 0;
 
+      std::string display_name
+        = (sampling_error_style && name.size() > 4)
+        ? name.substr(0, name.size() - 4)
+        : (is_operator(name)
+           ? ("operator" + fun_name_to_operator(name))
+           : name);
+
       for (size_t i = 0; i < signatures.size(); ++i) {
-        int promotions = num_promotions(args,signatures[i].second);
-        if (promotions < 0) continue; // no match
+        int promotions = num_promotions(args, signatures[i].second);
+        if (promotions < 0) continue;  // no match
         size_t promotions_ui = static_cast<size_t>(promotions);
         if (promotions_ui < min_promotions) {
           min_promotions = promotions_ui;
@@ -359,38 +450,37 @@ namespace stan {
       // all returns after here are for ill-typed input
 
       if (num_matches == 0) {
-        error_msgs << "no matches for function signature:"
-                   << std::endl;
+        error_msgs << "No matches for: "
+                   << std::endl << std::endl;
       } else {
-        error_msgs << num_matches << " matches for function signature with "
+        error_msgs << "Ambiguous: "
+                   << num_matches << " matches for with "
                    << min_promotions << " integer promotions: "
                    << std::endl;
       }
-      error_msgs << "  " << name << "(";
-      for (size_t i = 0; i < args.size(); ++i) {
-        if (i > 0)
-          error_msgs << ", ";
-        error_msgs << args[i];
-      }
-      error_msgs << ")"
-                 << std::endl;
+      print_signature(display_name, args, sampling_error_style, error_msgs);
 
-      error_msgs << std::endl
-                 << "available function signatures for "
-                 << name << ":" << std::endl;
-      for (size_t i = 0; i < signatures.size(); ++i) {
-        error_msgs << "  " << name << "(";
-        for (size_t j = 0; j < signatures[i].second.size(); ++j) {
-          if (j > 0) error_msgs << ", ";
-          error_msgs << signatures[i].second[j];
+      if (signatures.size() == 0) {
+        error_msgs << std::endl
+                   << (sampling_error_style ? "Distribution " : "Function ")
+                   << display_name << " not found." << std::endl;
+      } else {
+        error_msgs << std::endl
+                   << "Available argument signatures for "
+                   << display_name << ":" << std::endl << std::endl;
+
+        for (size_t i = 0; i < signatures.size(); ++i) {
+          print_signature(display_name, signatures[i].second,
+                          sampling_error_style, error_msgs);
         }
-        error_msgs << ")"
-                   << std::endl;
+        error_msgs << std::endl;
       }
-      return expr_type(); // ill-formed dummy
+
+      return expr_type();  // ill-formed dummy
     }
+
     function_signatures::function_signatures() {
-#include <stan/lang/function_signatures.h>
+#include <stan/lang/function_signatures.h>  // NOLINT
     }
     std::set<std::string>
     function_signatures::key_set() const {
@@ -399,7 +489,7 @@ namespace stan {
       using std::string;
       using std::vector;
       set<string> result;
-      for (map<string,vector<function_signature_t> >::const_iterator
+      for (map<string, vector<function_signature_t> >::const_iterator
              it = sigs_map_.begin();
            it != sigs_map_.end();
            ++it)
@@ -419,8 +509,8 @@ namespace stan {
     base_var_decl arg_decl::base_variable_declaration() {
       std::vector<expression> dims;
       for (size_t i = 0; i < arg_type_.num_dims_; ++i)
-        dims.push_back(expression(int_literal(0))); // dummy value 0
-      return base_var_decl(name_,dims,arg_type_.base_type_);
+        dims.push_back(expression(int_literal(0)));  // dummy value 0
+      return base_var_decl(name_, dims, arg_type_.base_type_);
     }
 
     function_decl_def::function_decl_def() { }
@@ -452,6 +542,11 @@ namespace stan {
       return false;
     }
     bool returns_type_vis::operator()(const assignment& st) const {
+      error_msgs_ << "Expecting return, found assignment statement."
+                 << std::endl;
+      return false;
+    }
+    bool returns_type_vis::operator()(const assgn& st) const {
       error_msgs_ << "Expecting return, found assignment statement."
                  << std::endl;
       return false;
@@ -491,8 +586,8 @@ namespace stan {
     bool returns_type_vis::operator()(const statements& st) const  {
       // last statement in sequence must return type
       if (st.statements_.size() == 0) {
-        error_msgs_ << ( "Expecting return, found"
-                         " statement sequence with empty body." )
+        error_msgs_ << ("Expecting return, found"
+                        " statement sequence with empty body.")
                     << std::endl;
         return false;
       }
@@ -510,8 +605,8 @@ namespace stan {
                                       conditional_statement& st) const  {
       // all condition bodies must end in appropriate return
       if (st.bodies_.size() != (st.conditions_.size() + 1)) {
-        error_msgs_ << ( "Expecting return, found conditional"
-                         " without final else.")
+        error_msgs_ << ("Expecting return, found conditional"
+                        " without final else.")
                     << std::endl;
         return false;
       }
@@ -533,8 +628,8 @@ namespace stan {
                       std::ostream& error_msgs) {
       if (return_type == VOID_T)
         return true;
-      returns_type_vis vis(return_type,error_msgs);
-      return boost::apply_visitor(vis,statement.statement_);
+      returns_type_vis vis(return_type, error_msgs);
+      return boost::apply_visitor(vis, statement.statement_);
     }
 
 
@@ -562,12 +657,15 @@ namespace stan {
       return e.type_;
     }
     expr_type expression_type_vis::operator()(const integrate_ode& e) const {
-      return expr_type(DOUBLE_T,2);
+      return expr_type(DOUBLE_T, 2);
     }
     expr_type expression_type_vis::operator()(const fun& e) const {
       return e.type_;
     }
     expr_type expression_type_vis::operator()(const index_op& e) const {
+      return e.type_;
+    }
+    expr_type expression_type_vis::operator()(const index_op_sliced& e) const {
       return e.type_;
     }
     expr_type expression_type_vis::operator()(const binary_op& e) const {
@@ -585,7 +683,7 @@ namespace stan {
     }
     expr_type expression::expression_type() const {
       expression_type_vis vis;
-      return boost::apply_visitor(vis,expr_);
+      return boost::apply_visitor(vis, expr_);
     }
     // template <typename Expr>
     // expression::expression(const Expr& expr) : expr_(expr) {  }
@@ -599,6 +697,7 @@ namespace stan {
     expression::expression(const integrate_ode& expr) : expr_(expr) { }
     expression::expression(const fun& expr) : expr_(expr) { }
     expression::expression(const index_op& expr) : expr_(expr) { }
+    expression::expression(const index_op_sliced& expr) : expr_(expr) { }
     expression::expression(const binary_op& expr) : expr_(expr) { }
     expression::expression(const unary_op& expr) : expr_(expr) { }
 
@@ -637,7 +736,7 @@ namespace stan {
     }
     bool contains_var::operator()(const array_literal& e) const {
       for (size_t i = 0; i < e.args_.size(); ++i)
-        if (boost::apply_visitor(*this,e.args_[i].expr_))
+        if (boost::apply_visitor(*this, e.args_[i].expr_))
           return true;
       return false;
     }
@@ -645,29 +744,31 @@ namespace stan {
       var_origin vo = var_map_.get_origin(e.name_);
       return vo == parameter_origin
         || vo == transformed_parameter_origin
-        || ( vo == local_origin && e.type_.base_type_ != INT_T);
+        || (vo == local_origin && e.type_.base_type_ != INT_T);
     }
     bool contains_var::operator()(const fun& e) const {
       for (size_t i = 0; i < e.args_.size(); ++i)
-        if (boost::apply_visitor(*this,e.args_[i].expr_))
+        if (boost::apply_visitor(*this, e.args_[i].expr_))
           return true;
       return false;
     }
     bool contains_var::operator()(const integrate_ode& e) const {
       // only init state and params may contain vars
       return boost::apply_visitor(*this, e.y0_.expr_)
-        || boost::apply_visitor(*this, e.theta_.expr_)
-        ;
+        || boost::apply_visitor(*this, e.theta_.expr_);
     }
     bool contains_var::operator()(const index_op& e) const {
-      return boost::apply_visitor(*this,e.expr_.expr_);
+      return boost::apply_visitor(*this, e.expr_.expr_);
+    }
+    bool contains_var::operator()(const index_op_sliced& e) const {
+      return boost::apply_visitor(*this, e.expr_.expr_);
     }
     bool contains_var::operator()(const binary_op& e) const {
-      return boost::apply_visitor(*this,e.left.expr_)
-        || boost::apply_visitor(*this,e.right.expr_);
+      return boost::apply_visitor(*this, e.left.expr_)
+        || boost::apply_visitor(*this, e.right.expr_);
     }
     bool contains_var::operator()(const unary_op& e) const {
-        return boost::apply_visitor(*this,e.subject.expr_);
+        return boost::apply_visitor(*this, e.subject.expr_);
     }
 
     bool is_linear_function(const std::string& name) {
@@ -697,14 +798,13 @@ namespace stan {
         || name == "to_matrix"
         || name == "to_array_1d"
         || name == "to_array_2d"
-        || name == "transpose"
-        ;
+        || name == "transpose";
     }
 
     bool has_var(const expression& e,
                  const variable_map& var_map) {
       contains_var vis(var_map);
-      return boost::apply_visitor(vis,e.expr_);
+      return boost::apply_visitor(vis, e.expr_);
     }
 
     contains_nonparam_var::contains_nonparam_var(const variable_map& var_map)
@@ -721,36 +821,38 @@ namespace stan {
     }
     bool contains_nonparam_var::operator()(const array_literal& e) const {
       for (size_t i = 0; i < e.args_.size(); ++i)
-        if (boost::apply_visitor(*this,e.args_[i].expr_))
+        if (boost::apply_visitor(*this, e.args_[i].expr_))
           return true;
       return false;
     }
     bool contains_nonparam_var::operator()(const variable& e) const {
       var_origin vo = var_map_.get_origin(e.name_);
-      return ( vo == transformed_parameter_origin
-               || vo == local_origin );
+      return (vo == transformed_parameter_origin
+              || vo == local_origin);
     }
     bool contains_nonparam_var::operator()(const integrate_ode& e) const {
       // if any vars, return true because integration will be nonlinear
       return boost::apply_visitor(*this, e.y0_.expr_)
-        || boost::apply_visitor(*this, e.theta_.expr_)
-        ;
+        || boost::apply_visitor(*this, e.theta_.expr_);
     }
     bool contains_nonparam_var::operator()(const fun& e) const {
       // any function applied to non-linearly transformed var
       for (size_t i = 0; i < e.args_.size(); ++i)
-        if (boost::apply_visitor(*this,e.args_[i].expr_))
+        if (boost::apply_visitor(*this, e.args_[i].expr_))
           return true;
       // non-linear function applied to var
       if (!is_linear_function(e.name_)) {
         for (size_t i = 0; i < e.args_.size(); ++i)
-          if (has_var(e.args_[i],var_map_))
+          if (has_var(e.args_[i], var_map_))
             return true;
       }
       return false;
     }
     bool contains_nonparam_var::operator()(const index_op& e) const {
-      return boost::apply_visitor(*this,e.expr_.expr_);
+      return boost::apply_visitor(*this, e.expr_.expr_);
+    }
+    bool contains_nonparam_var::operator()(const index_op_sliced& e) const {
+      return boost::apply_visitor(*this, e.expr_.expr_);
     }
     bool contains_nonparam_var::operator()(const binary_op& e) const {
       if (e.op == "||"
@@ -762,44 +864,49 @@ namespace stan {
           || e.op == ">"
           || e.op == ">=")
         return true;
-      if (has_non_param_var(e.left,var_map_)
-          || has_non_param_var(e.right,var_map_))
+      if (has_non_param_var(e.left, var_map_)
+          || has_non_param_var(e.right, var_map_))
         return true;
       if (e.op == "*" || e.op == "/")
-        return has_var(e.left,var_map_) && has_var(e.right,var_map_);
+        return has_var(e.left, var_map_) && has_var(e.right, var_map_);
       return false;
     }
     bool contains_nonparam_var::operator()(const unary_op& e) const {
       // only negation, which is linear, so recurse
-      return has_non_param_var(e.subject,var_map_);
+      return has_non_param_var(e.subject, var_map_);
     }
 
     bool has_non_param_var(const expression& e,
                            const variable_map& var_map) {
       contains_nonparam_var vis(var_map);
-      return boost::apply_visitor(vis,e.expr_);
+      return boost::apply_visitor(vis, e.expr_);
     }
 
     bool is_nil_op::operator()(const nil& /*x*/) const { return true; }
     bool is_nil_op::operator()(const int_literal& /*x*/) const { return false; }
-    bool is_nil_op::operator()(const double_literal& /* x */) const { return false; }
-    bool is_nil_op::operator()(const array_literal& /* x */) const { return false; }
+    bool is_nil_op::operator()(const double_literal& /* x */) const {
+      return false;
+    }
+    bool is_nil_op::operator()(const array_literal& /* x */)
+      const { return false; }
     bool is_nil_op::operator()(const variable& /* x */) const { return false; }
-    bool is_nil_op::operator()(const integrate_ode& /* x */) const { return false; }
+    bool is_nil_op::operator()(const integrate_ode& /* x */) const {
+      return false;
+    }
     bool is_nil_op::operator()(const fun& /* x */) const { return false; }
     bool is_nil_op::operator()(const index_op& /* x */) const { return false; }
+    bool is_nil_op::operator()(const index_op_sliced& /* x */) const {
+      return false;
+    }
     bool is_nil_op::operator()(const binary_op& /* x */) const { return false; }
     bool is_nil_op::operator()(const unary_op& /* x */) const { return false; }
 
-    // template <typename T>
-    // bool is_nil_op::operator()(const T& /* x */) const { return false; }
-
     bool is_nil(const expression& e) {
       is_nil_op ino;
-      return boost::apply_visitor(ino,e.expr_);
+      return boost::apply_visitor(ino, e.expr_);
     }
 
-    variable_dims::variable_dims() { } // req for FUSION_ADAPT
+    variable_dims::variable_dims() { }  // req for FUSION_ADAPT
     variable_dims::variable_dims(std::string const& name,
                                  std::vector<expression> const& dims)
       : name_(name),
@@ -826,11 +933,11 @@ namespace stan {
 
 
     double_literal::double_literal()
-      : type_(DOUBLE_T,0U) {
+      : type_(DOUBLE_T, 0U) {
     }
     double_literal::double_literal(double val)
       : val_(val),
-        type_(DOUBLE_T,0U) {
+        type_(DOUBLE_T, 0U) {
     }
     double_literal& double_literal::operator=(const double_literal& dl) {
       val_ = dl.val_;
@@ -841,11 +948,11 @@ namespace stan {
 
     array_literal::array_literal()
       : args_(),
-        type_(DOUBLE_T,1U) {
+        type_(DOUBLE_T, 1U) {
     }
     array_literal::array_literal(const std::vector<expression>& args)
       : args_(args),
-        type_() { // ill-formed w/o help
+        type_() {  // ill-formed w/o help
     }
     array_literal& array_literal::operator=(const array_literal& al) {
       args_ = al.args_;
@@ -859,7 +966,6 @@ namespace stan {
                             size_t num_dims) {
       type_ = expr_type(base_type, num_dims);
     }
-
 
     integrate_ode::integrate_ode() { }
     integrate_ode::integrate_ode(const std::string& system_function_name,
@@ -878,7 +984,6 @@ namespace stan {
         x_int_(x_int) {
     }
 
-
     fun::fun() { }
     fun::fun(std::string const& name,
              std::vector<expression> const& args)
@@ -887,7 +992,7 @@ namespace stan {
       infer_type();
     }
     void fun::infer_type() {
-      // FIXME: remove this useless function and any calls to it
+      // TODO(carpenter): remove this useless function and any calls to it
     }
 
 
@@ -898,21 +1003,20 @@ namespace stan {
       return total;
     }
 
-
     expr_type infer_type_indexing(const base_expr_type& expr_base_type,
                                   size_t num_expr_dims,
                                   size_t num_index_dims) {
       if (num_index_dims <= num_expr_dims)
-        return expr_type(expr_base_type,num_expr_dims - num_index_dims);
+        return expr_type(expr_base_type, num_expr_dims - num_index_dims);
       if (num_index_dims == (num_expr_dims + 1)) {
         if (expr_base_type == VECTOR_T || expr_base_type == ROW_VECTOR_T)
-          return expr_type(DOUBLE_T,0U);
+          return expr_type(DOUBLE_T, 0U);
         if (expr_base_type == MATRIX_T)
-          return expr_type(ROW_VECTOR_T,0U);
+          return expr_type(ROW_VECTOR_T, 0U);
       }
       if (num_index_dims == (num_expr_dims + 2))
         if (expr_base_type == MATRIX_T)
-          return expr_type(DOUBLE_T,0U);
+          return expr_type(DOUBLE_T, 0U);
 
       // error condition, result expr_type has is_ill_formed() = true
       return expr_type();
@@ -934,7 +1038,15 @@ namespace stan {
       infer_type();
     }
     void index_op::infer_type() {
-      type_ = infer_type_indexing(expr_,total_dims(dimss_));
+      type_ = infer_type_indexing(expr_, total_dims(dimss_));
+    }
+
+    index_op_sliced::index_op_sliced() { }
+    index_op_sliced::index_op_sliced(const expression& expr,
+                                     const std::vector<idx>& idxs)
+      : expr_(expr), idxs_(idxs), type_(indexed_type(expr_, idxs_)) { }
+    void index_op_sliced::infer_type() {
+      type_ = indexed_type(expr_, idxs_);
     }
 
     binary_op::binary_op() { }
@@ -969,6 +1081,61 @@ namespace stan {
     bool range::has_high() const {
       return !is_nil(high_.expr_);
     }
+
+    uni_idx::uni_idx() { }
+    uni_idx::uni_idx(const expression& idx) : idx_(idx) { }
+
+    multi_idx::multi_idx() { }
+    multi_idx::multi_idx(const expression& idxs) : idxs_(idxs) { }
+
+    omni_idx::omni_idx() { }
+
+    lb_idx::lb_idx() { }
+    lb_idx::lb_idx(const expression& lb) : lb_(lb) { }
+
+    ub_idx::ub_idx() { }
+    ub_idx::ub_idx(const expression& ub) : ub_(ub) { }
+
+    lub_idx::lub_idx() { }
+    lub_idx::lub_idx(const expression& lb, const expression& ub)
+      : lb_(lb), ub_(ub) {
+    }
+
+    idx::idx() { }
+
+    idx::idx(const uni_idx& i) : idx_(i) { }
+    idx::idx(const multi_idx& i) : idx_(i) { }
+    idx::idx(const omni_idx& i) : idx_(i) { }
+    idx::idx(const lb_idx& i) : idx_(i) { }
+    idx::idx(const ub_idx& i) : idx_(i) { }
+    idx::idx(const lub_idx& i) : idx_(i) { }
+
+
+    is_multi_index_vis::is_multi_index_vis() { }
+    bool is_multi_index_vis::operator()(const uni_idx& i) const {
+      return false;
+    }
+    bool is_multi_index_vis::operator()(const multi_idx& i) const {
+      return true;
+    }
+    bool is_multi_index_vis::operator()(const omni_idx& i) const {
+      return true;
+    }
+    bool is_multi_index_vis::operator()(const lb_idx& i) const {
+      return true;
+    }
+    bool is_multi_index_vis::operator()(const ub_idx& i) const {
+      return true;
+    }
+    bool is_multi_index_vis::operator()(const lub_idx& i) const {
+      return true;
+    }
+
+    bool is_multi_index(const idx& idx) {
+      is_multi_index_vis v;
+      return boost::apply_visitor(v, idx.idx_);
+    }
+
 
     void print_var_origin(std::ostream& o, const var_origin& vo) {
       if (vo == model_name_origin)
@@ -1036,7 +1203,7 @@ namespace stan {
     void variable_map::add(const std::string& name,
                            const base_var_decl& base_decl,
                            const var_origin& vo) {
-      map_[name] = range_t(base_decl,vo);
+      map_[name] = range_t(base_decl, vo);
     }
     void variable_map::remove(const std::string& name) {
       map_.erase(name);
@@ -1049,7 +1216,7 @@ namespace stan {
     int_var_decl::int_var_decl(range const& range,
                                std::string const& name,
                                std::vector<expression> const& dims)
-      : base_var_decl(name,dims,INT_T),
+      : base_var_decl(name, dims, INT_T),
         range_(range)
     { }
 
@@ -1062,7 +1229,7 @@ namespace stan {
     double_var_decl::double_var_decl(range const& range,
                                      std::string const& name,
                                      std::vector<expression> const& dims)
-      : base_var_decl(name,dims,DOUBLE_T),
+      : base_var_decl(name, dims, DOUBLE_T),
         range_(range)
     { }
 
@@ -1073,7 +1240,7 @@ namespace stan {
     unit_vector_var_decl::unit_vector_var_decl(expression const& K,
                                        std::string const& name,
                                        std::vector<expression> const& dims)
-      : base_var_decl(name,dims,VECTOR_T),
+      : base_var_decl(name, dims, VECTOR_T),
         K_(K)
     { }
 
@@ -1084,7 +1251,7 @@ namespace stan {
     simplex_var_decl::simplex_var_decl(expression const& K,
                                        std::string const& name,
                                        std::vector<expression> const& dims)
-      : base_var_decl(name,dims,VECTOR_T),
+      : base_var_decl(name, dims, VECTOR_T),
         K_(K)
     { }
 
@@ -1095,7 +1262,7 @@ namespace stan {
     ordered_var_decl::ordered_var_decl(expression const& K,
                            std::string const& name,
                            std::vector<expression> const& dims)
-        : base_var_decl(name,dims,VECTOR_T),
+        : base_var_decl(name, dims, VECTOR_T),
           K_(K) {
       }
 
@@ -1106,7 +1273,7 @@ namespace stan {
     positive_ordered_var_decl::positive_ordered_var_decl(expression const& K,
                            std::string const& name,
                            std::vector<expression> const& dims)
-        : base_var_decl(name,dims,VECTOR_T),
+        : base_var_decl(name, dims, VECTOR_T),
           K_(K) {
       }
 
@@ -1116,7 +1283,7 @@ namespace stan {
                                      expression const& M,
                                      std::string const& name,
                                      std::vector<expression> const& dims)
-        : base_var_decl(name,dims,VECTOR_T),
+        : base_var_decl(name, dims, VECTOR_T),
           range_(range),
           M_(M) {
     }
@@ -1126,7 +1293,7 @@ namespace stan {
                                         expression const& N,
                                         std::string const& name,
                                         std::vector<expression> const& dims)
-        : base_var_decl(name,dims,ROW_VECTOR_T),
+        : base_var_decl(name, dims, ROW_VECTOR_T),
           range_(range),
           N_(N) {
     }
@@ -1137,7 +1304,7 @@ namespace stan {
                       expression const& N,
                       std::string const& name,
                       std::vector<expression> const& dims)
-        : base_var_decl(name,dims,MATRIX_T),
+        : base_var_decl(name, dims, MATRIX_T),
           range_(range),
           M_(M),
           N_(N) {
@@ -1148,10 +1315,10 @@ namespace stan {
       : base_var_decl(MATRIX_T) {
     }
     cholesky_factor_var_decl::cholesky_factor_var_decl(expression const& M,
-                                                       expression const& N,
-                                                       std::string const& name,
-                                                       std::vector<expression> const& dims)
-      : base_var_decl(name,dims,MATRIX_T),
+                                       expression const& N,
+                                       std::string const& name,
+                                       std::vector<expression> const& dims)
+      : base_var_decl(name, dims, MATRIX_T),
         M_(M),
         N_(N) {
     }
@@ -1160,18 +1327,18 @@ namespace stan {
       : base_var_decl(MATRIX_T) {
     }
     cholesky_corr_var_decl::cholesky_corr_var_decl(expression const& K,
-                                                   std::string const& name,
-                                                   std::vector<expression> const& dims)
-      : base_var_decl(name,dims,MATRIX_T),
+                                       std::string const& name,
+                                       std::vector<expression> const& dims)
+      : base_var_decl(name, dims, MATRIX_T),
         K_(K) {
     }
 
     cov_matrix_var_decl::cov_matrix_var_decl() : base_var_decl(MATRIX_T) {
     }
     cov_matrix_var_decl::cov_matrix_var_decl(expression const& K,
-                                             std::string const& name,
-                                             std::vector<expression> const& dims)
-      : base_var_decl(name,dims,MATRIX_T),
+                                         std::string const& name,
+                                         std::vector<expression> const& dims)
+      : base_var_decl(name, dims, MATRIX_T),
         K_(K) {
     }
 
@@ -1179,7 +1346,7 @@ namespace stan {
     corr_matrix_var_decl::corr_matrix_var_decl(expression const& K,
                                    std::string const& name,
                                    std::vector<expression> const& dims)
-        : base_var_decl(name,dims,MATRIX_T),
+        : base_var_decl(name, dims, MATRIX_T),
           K_(K) {
     }
 
@@ -1188,7 +1355,7 @@ namespace stan {
 
     name_vis::name_vis() { }
     std::string name_vis::operator()(const nil& /* x */) const {
-      return ""; // fail if arises
+      return "";  // fail if arises
     }
     std::string name_vis::operator()(const int_var_decl& x) const {
       return x.name_;
@@ -1251,7 +1418,7 @@ namespace stan {
     var_decl::var_decl(const corr_matrix_var_decl& decl) : decl_(decl) { }
 
     std::string var_decl::name() const {
-      return boost::apply_visitor(name_vis(),decl_);
+      return boost::apply_visitor(name_vis(), decl_);
     }
 
     statement::statement() : statement_(nil()) { }
@@ -1259,8 +1426,11 @@ namespace stan {
     statement::statement(const statement_t& st) : statement_(st) { }
     statement::statement(const nil& st) : statement_(st) { }
     statement::statement(const assignment& st) : statement_(st) { }
+    statement::statement(const assgn& st) : statement_(st) { }
     statement::statement(const sample& st) : statement_(st) { }
-    statement::statement(const increment_log_prob_statement& st) : statement_(st) { }
+    statement::statement(const increment_log_prob_statement& st)
+      : statement_(st) {
+    }
     statement::statement(const statements& st) : statement_(st) { }
     statement::statement(const expression& st) : statement_(st) { }
     statement::statement(const for_statement& st) : statement_(st) { }
@@ -1278,10 +1448,14 @@ namespace stan {
     bool is_no_op_statement_vis::operator()(const assignment& st) const {
       return false;
     }
+    bool is_no_op_statement_vis::operator()(const assgn& st) const {
+      return false;
+    }
     bool is_no_op_statement_vis::operator()(const sample& st) const {
       return false;
     }
-    bool is_no_op_statement_vis::operator()(const increment_log_prob_statement& t) const {
+    bool is_no_op_statement_vis::operator()(
+                            const increment_log_prob_statement& t) const {
       return false;
     }
     bool is_no_op_statement_vis::operator()(const expression& st) const {
@@ -1293,7 +1467,8 @@ namespace stan {
     bool is_no_op_statement_vis::operator()(const for_statement& st) const {
       return false;
     }
-    bool is_no_op_statement_vis::operator()(const conditional_statement& st) const {
+    bool is_no_op_statement_vis::operator()(
+                                    const conditional_statement& st) const {
       return false;
     }
     bool is_no_op_statement_vis::operator()(const while_statement& st) const {
@@ -1314,12 +1489,13 @@ namespace stan {
 
     bool statement::is_no_op_statement() const {
       is_no_op_statement_vis vis;
-      return boost::apply_visitor(vis,statement_);
+      return boost::apply_visitor(vis, statement_);
     }
 
     increment_log_prob_statement::increment_log_prob_statement() {
     }
-    increment_log_prob_statement::increment_log_prob_statement(const expression& log_prob)
+    increment_log_prob_statement::increment_log_prob_statement(
+                                               const expression& log_prob)
       : log_prob_(log_prob) {
     }
 
@@ -1396,13 +1572,12 @@ namespace stan {
       }
     bool sample::is_ill_formed() const {
         return expr_.expression_type().is_ill_formed()
-          || ( truncation_.has_low()
+          || (truncation_.has_low()
+              && expr_.expression_type() != truncation_.low_.expression_type())
+          || (truncation_.has_high()
                && expr_.expression_type()
-                  != truncation_.low_.expression_type() )
-          || ( truncation_.has_high()
-               && expr_.expression_type()
-                  != truncation_.high_.expression_type() );
-      }
+                  != truncation_.high_.expression_type());
+    }
 
     assignment::assignment() {
     }
@@ -1411,6 +1586,121 @@ namespace stan {
       : var_dims_(var_dims),
         expr_(expr) {
     }
+
+    var_occurs_vis::var_occurs_vis(const variable& e)
+      : var_name_(e.name_) {
+    }
+
+    bool var_occurs_vis::operator()(const nil& st) const {
+      return false;
+    }
+    bool var_occurs_vis::operator()(const int_literal& e) const {
+      return false;
+    }
+    bool var_occurs_vis::operator()(const double_literal& e) const {
+      return false;
+    }
+    bool var_occurs_vis::operator()(const array_literal& e) const {
+      return false;  // TODO(carpenter): update for array_literal
+    }
+    bool var_occurs_vis::operator()(const variable& e) const {
+      return var_name_ == e.name_;
+    }
+    bool var_occurs_vis::operator()(const fun& e) const {
+      for (size_t i = 0; i < e.args_.size(); ++i)
+        if (boost::apply_visitor(*this, e.args_[i].expr_))
+          return true;
+      return false;
+    }
+    bool var_occurs_vis::operator()(const integrate_ode& e) const {
+      return false;  // no refs persist out of integrate_ode() call
+    }
+    bool var_occurs_vis::operator()(const index_op& e) const {
+      // refs only persist out of expression, not indexes
+      return boost::apply_visitor(*this, e.expr_.expr_);
+    }
+    bool var_occurs_vis::operator()(const index_op_sliced& e) const {
+      return boost::apply_visitor(*this, e.expr_.expr_);
+    }
+    bool var_occurs_vis::operator()(const binary_op& e) const {
+      return boost::apply_visitor(*this, e.left.expr_)
+        || boost::apply_visitor(*this, e.right.expr_);
+    }
+    bool var_occurs_vis::operator()(const unary_op& e) const {
+      return boost::apply_visitor(*this, e.subject.expr_);
+    }
+
+    assgn::assgn() { }
+    assgn::assgn(const variable& lhs_var, const std::vector<idx>& idxs,
+                 const expression& rhs)
+      : lhs_var_(lhs_var), idxs_(idxs), rhs_(rhs) { }
+
+    bool assgn::lhs_var_occurs_on_rhs() const {
+      var_occurs_vis vis(lhs_var_);
+      return boost::apply_visitor(vis, rhs_.expr_);
+    }
+
+    /**
+     * Return the expression type for the result of applying the
+     * specified indexes to the specified expression.  If the reuslt
+     * is ill typed, the output type is <code>ILL_FORMED_T</code> and
+     * dimensions are <code>OU</code>.
+     *
+     * @param[in] e Expression to index.
+     * @param[in] idxs Vector of indexes.
+     * @return Type of indexed expression.
+     */
+    expr_type indexed_type(const expression& e,
+                           const std::vector<idx>& idxs) {
+      expr_type e_type = e.expression_type();
+
+      base_expr_type base_type = e_type.base_type_;
+      size_t base_dims = e_type.num_dims_;
+      size_t unindexed_dims = base_dims;
+      size_t out_dims = 0U;
+      size_t i = 0;
+      for ( ; unindexed_dims > 0 && i < idxs.size(); ++i, --unindexed_dims)
+        if (is_multi_index(idxs[i]))
+          ++out_dims;
+      if (idxs.size() - i == 0) {
+        return expr_type(base_type, out_dims + unindexed_dims);
+      } else if (idxs.size() - i == 1) {
+        if (base_type == MATRIX_T) {
+          if (is_multi_index(idxs[i]))
+            return expr_type(MATRIX_T, out_dims);
+          else
+            return expr_type(ROW_VECTOR_T, out_dims);
+        } else if (base_type == VECTOR_T) {
+          if (is_multi_index(idxs[i]))
+            return expr_type(VECTOR_T, out_dims);
+          else
+            return expr_type(DOUBLE_T, out_dims);
+        } else if (base_type == ROW_VECTOR_T) {
+          if (is_multi_index(idxs[i]))
+            return expr_type(ROW_VECTOR_T, out_dims);
+          else
+            return expr_type(DOUBLE_T, out_dims);
+        } else {
+          return expr_type(ILL_FORMED_T, 0U);
+        }
+      } else if (idxs.size() - i == 2) {
+        if (base_type == MATRIX_T) {
+          if (is_multi_index(idxs[i]) && is_multi_index(idxs[i + 1]))
+            return expr_type(MATRIX_T, out_dims);
+          else if (is_multi_index(idxs[i]))
+            return expr_type(VECTOR_T, out_dims);
+          else if (is_multi_index(idxs[i + 1]))
+            return expr_type(ROW_VECTOR_T, out_dims);
+          else
+            return expr_type(DOUBLE_T, out_dims);
+        } else {
+          return expr_type(ILL_FORMED_T, 0U);
+        }
+      } else {
+        return expr_type(ILL_FORMED_T, 0U);
+      }
+    }
+
 
     expression& expression::operator+=(const expression& rhs) {
       expr_ = binary_op(expr_, "+", rhs);
@@ -1457,9 +1747,9 @@ namespace stan {
       function_signature_t sig;
       int matches
         = function_signatures::instance()
-        .get_signature_matches(name,arg_types,sig);
+        .get_signature_matches(name, arg_types, sig);
       if (matches != 1)
-        return false; // reall shouldn't come up;  throw instead?
+        return false;  // reall shouldn't come up;  throw instead?
       std::pair<std::string, function_signature_t>
         name_sig(name, sig);
       return function_signatures::instance().is_user_defined(name_sig);
@@ -1472,7 +1762,7 @@ namespace stan {
       variate_params.push_back(variate);
       for (size_t i = 0; i < params.size(); ++i)
         variate_params.push_back(params[i]);
-      return is_user_defined(name,variate_params);
+      return is_user_defined(name, variate_params);
     }
 
     bool is_user_defined(const fun& fx) {
@@ -1489,7 +1779,8 @@ namespace stan {
         error_msgs << "Mismatched array dimensions.";
       }
       if (l_type.base_type_ != r_type.base_type_
-          && (! (l_type.base_type_ == DOUBLE_T && r_type.base_type_ == INT_T))) {
+          && (!(l_type.base_type_ == DOUBLE_T
+                && r_type.base_type_ == INT_T))) {
         assignable = false;
         error_msgs << "Base type mismatch. ";
       }

@@ -3,6 +3,7 @@
 
 #include <boost/lexical_cast.hpp>
 
+#include <stan/io/validate_zero_buf.hpp>
 #include <stan/io/json/json_error.hpp>
 
 #include <stdexcept>
@@ -186,8 +187,9 @@ namespace stan {
 
           if (is_integer) {
             if (is_positive) {
-              unsigned long n;
+              unsigned long n;  // NOLINT(runtime/int)
               try {
+                // NOLINTNEXTLINE(runtime/int)
                 n = boost::lexical_cast<unsigned long>(ss.str());
               } catch (const boost::bad_lexical_cast & ) {
                 throw json_exception("number exceeds integer range");
@@ -195,8 +197,9 @@ namespace stan {
               ss >> n;
               h_.number_unsigned_long(n);
             } else {
-              long n;
+              long n;  // NOLINT(runtime/int)
               try {
+                // NOLINTNEXTLINE(runtime/int)
                 n = boost::lexical_cast<unsigned long>(ss.str());
               } catch (const boost::bad_lexical_cast & ) {
                 throw json_exception("number exceeds integer range");
@@ -207,7 +210,10 @@ namespace stan {
           } else {
             double x;
             try {
-              x = boost::lexical_cast<double>(ss.str());
+              std::string ss_str = ss.str();
+              x = boost::lexical_cast<double>(ss_str);
+              if (x == 0)
+                io::validate_zero_buf(ss_str);
             } catch (const boost::bad_lexical_cast & ) {
               throw json_exception("number exceeds double range");
             }

@@ -1,12 +1,10 @@
 #ifndef STAN_OPTIMIZATION_LBFGS_UPDATE_HPP
 #define STAN_OPTIMIZATION_LBFGS_UPDATE_HPP
 
-#include <vector>
-
+#include <stan/math/prim/mat/fun/Eigen.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/circular_buffer.hpp>
-
-#include <stan/math/prim/mat/fun/Eigen.hpp>
+#include <vector>
 
 namespace stan {
   namespace optimization {
@@ -19,11 +17,12 @@ namespace stan {
              int DimAtCompile = Eigen::Dynamic>
     class LBFGSUpdate {
     public:
-      typedef Eigen::Matrix<Scalar,DimAtCompile,1> VectorT;
-      typedef Eigen::Matrix<Scalar,DimAtCompile,DimAtCompile> HessianT;
-      typedef boost::tuple<Scalar,VectorT,VectorT> UpdateT;
+      typedef Eigen::Matrix<Scalar, DimAtCompile, 1> VectorT;
+      typedef Eigen::Matrix<Scalar, DimAtCompile, DimAtCompile> HessianT;
+      // NOLINTNEXTLINE(build/include_what_you_use)
+      typedef boost::tuple<Scalar, VectorT, VectorT> UpdateT;
 
-      LBFGSUpdate(size_t L = 5) : _buf(L) {}
+      explicit LBFGSUpdate(size_t L = 5) : _buf(L) {}
 
       /**
        * Set the number of inverse Hessian updates to keep.
@@ -53,8 +52,7 @@ namespace stan {
         if (reset) {
           B0fact = yk.squaredNorm()/skyk;
           _buf.clear();
-        }
-        else {
+        } else {
           B0fact = 1.0;
         }
 
@@ -62,7 +60,7 @@ namespace stan {
         Scalar invskyk = 1.0/skyk;
         _gammak = skyk/yk.squaredNorm();
         _buf.push_back();
-        _buf.back() = boost::tie(invskyk,yk,sk);
+        _buf.back() = boost::tie(invskyk, yk, sk);
 
         return B0fact;
       }
@@ -77,7 +75,8 @@ namespace stan {
        **/
       inline void search_direction(VectorT &pk, const VectorT &gk) const {
         std::vector<Scalar> alphas(_buf.size());
-        typename boost::circular_buffer<UpdateT>::const_reverse_iterator buf_rit;
+        typename
+          boost::circular_buffer<UpdateT>::const_reverse_iterator buf_rit;
         typename boost::circular_buffer<UpdateT>::const_iterator buf_it;
         typename std::vector<Scalar>::const_iterator alpha_it;
         typename std::vector<Scalar>::reverse_iterator alpha_rit;

@@ -1,32 +1,33 @@
 #ifndef STAN_MCMC_HMC_BASE_HMC_HPP
 #define STAN_MCMC_HMC_BASE_HMC_HPP
 
+#include <stan/interface_callbacks/writer/stream_writer.hpp>
+#include <stan/mcmc/base_mcmc.hpp>
+#include <stan/mcmc/hmc/hamiltonians/ps_point.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>
 #include <boost/random/variate_generator.hpp>
 #include <boost/random/uniform_01.hpp>
-
-#include <stan/mcmc/base_mcmc.hpp>
-#include <stan/mcmc/hmc/hamiltonians/ps_point.hpp>
-
-#include <math.h>
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace stan {
-
   namespace mcmc {
 
-    template <class M, class P, template<class, class> class H,
-              template<class, class> class I, class BaseRNG>
+    template <class Model,
+              template<class, class> class Hamiltonian,
+              template<class> class Integrator,
+              class BaseRNG>
     class base_hmc : public base_mcmc {
     public:
-      base_hmc(M &m, BaseRNG& rng, std::ostream* o, std::ostream* e)
+      base_hmc(Model &model, BaseRNG& rng,
+               std::ostream* o, std::ostream* e)
         : base_mcmc(o, e),
-          z_(m.num_params_r()),
+          z_(model.num_params_r()),
           integrator_(this->out_stream_),
-          hamiltonian_(m, this->err_stream_),
+          hamiltonian_(model, this->err_stream_),
           rand_int_(rng),
           rand_uniform_(rand_int_),
           nom_epsilon_(0.1),
@@ -37,7 +38,8 @@ namespace stan {
         if (!o)
           return;
         *o << "# Step size = " << get_nominal_stepsize() << std::endl;
-        z_.write_metric(o);
+        stan::interface_callbacks::writer::stream_writer writer(*o);
+        z_.write_metric(writer);
       }
 
       void get_sampler_diagnostic_names(std::vector<std::string>& model_names,
@@ -112,11 +114,11 @@ namespace stan {
         this->z_.ps_point::operator=(z_init);
       }
 
-      P& z() {
+      typename Hamiltonian<Model, BaseRNG>::PointType& z() {
         return z_;
       }
 
-      virtual void set_nominal_stepsize(const double e) {
+      virtual void set_nominal_stepsize(double e) {
         if (e > 0)
           nom_epsilon_ = e;
       }
@@ -129,7 +131,7 @@ namespace stan {
         return this->epsilon_;
       }
 
-      virtual void set_stepsize_jitter(const double j) {
+      virtual void set_stepsize_jitter(double j) {
         if (j > 0 && j < 1)
           epsilon_jitter_ = j;
       }
@@ -146,9 +148,9 @@ namespace stan {
       }
 
     protected:
-      P z_;
-      I<H<M, BaseRNG>, P> integrator_;
-      H<M, BaseRNG> hamiltonian_;
+      typename Hamiltonian<Model, BaseRNG>::PointType z_;
+      Integrator<Hamiltonian<Model, BaseRNG> > integrator_;
+      Hamiltonian<Model, BaseRNG> hamiltonian_;
 
       BaseRNG& rand_int_;
 
@@ -161,7 +163,5 @@ namespace stan {
     };
 
   }  // mcmc
-
 }  // stan
-
 #endif

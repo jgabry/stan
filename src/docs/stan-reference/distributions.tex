@@ -2,8 +2,11 @@
 
 \chapter{Conventions for Probability Functions}
 
-The probability functions (density or mass, depending on discreteness
-of the variable) are all set up to follow some basic conventions.
+The probability functions (probability density functions for
+continuous outputs and probability mass functions for discrete
+outputs) probability mass, depending on discreteness of the variable)
+are all set up to follow the same basic naming and behavioral
+conventions.
 
 \section{Finite Inputs}
 
@@ -20,12 +23,283 @@ floating-point values.
 Many distributions are defined with support or constraints on
 parameters forming an open interval.  For example, the normal density
 function accepts a scale parameter $\sigma > 0$.  If $\sigma = 0$, the
-probability function will throw an exception.  
+probability function will throw an exception.
 
 This is true even for (complementary) cumulative distribution
 functions, which will throw exceptions when given input that is out of
 the support.
 
+\section{Pseudorandom Number Generators}
+
+For most of the probability functions, there is a matching
+pseudorandom number generator (PRNG) with the suffix \code{\_rng}.
+For example, the function \code{normal\_rng(real, real)} accepts two
+real arguments, an unconstrained location $\mu$ and positive scale
+$\sigma > 0$, and returns an unconstrained pseudorandom value drawn
+from $\distro{Normal}(\mu,\sigma)$.
+
+\subsection{Generated Quantities Only}
+
+Unlike regular functions, the PRNG functions may only be used in the
+generated quantities block.
+
+\subsection{Not Vectorized}
+
+Unlike the probability functions, the PRNG functions are not
+vectorized.
+
+
+\subsection{Applications of PRNGs}
+
+The main application of PRNGs is for posterior inference, including
+prediction and posterior predictive checks.  They can also be used for
+pure data simulation, which is like a posterior predictive check with
+no conditioning.
+
+\subsubsection{Prediction}
+
+Consider predicting unobserved outcomes using linear
+regression.  Given predictors $x_1, \ldots, x_N$ and observed outcomes
+$y_1,\ldots,y_N$, and assuming a standard linear regression with
+intercept $\alpha$, slope $\beta$, and error scale $\sigma$, along with
+improper uniform priors, the posterior over the parameters given $x$
+and $y$ is
+%
+\[
+p(\alpha, \beta, \sigma \, | \, x, y) 
+\propto 
+\prod_{n=1}^N 
+  \distro{Normal}(y_n \, | \, \alpha + \beta x_n, \sigma).
+\]
+%
+For this model, the posterior predictive inference for a new outcome
+$\tilde{y}_m$ given a predictor $\tilde{x}_m$, conditioned on the
+observed data $x$ and $y$, is
+\[
+p(\tilde{y}_n \, | \, \tilde{x}_n, x, y)
+= \int_{(\alpha,\beta,\sigma)}
+  \distro{Normal}(\tilde{y}_n \, | \, \alpha + \beta \tilde{x}_n, \sigma)
+  \times
+  p(\alpha, \beta, \sigma \, | \, x, y) 
+  \
+  \mathrm{d}(\alpha,\beta,\sigma).
+\]
+%
+To code the posterior predictive inference in Stan, a standard linear
+regression is combined with a random number in the generated
+quantities block.
+%
+\begin{stancode}
+data {
+  int<lower=0> N;
+  vector[N] y;
+  vector[N] x;
+  int<lower=0> N_tilde;
+  vector[N_tilde] x_tilde;
+}
+parameters {
+  real alpha;
+  real beta;
+  real<lower=0> sigma;
+}
+model {
+  y ~ normal(alpha + beta * x, sigma);
+}
+generated quantities {
+  vector[N_tilde] y_tilde;
+  for (n in 1:N_tilde)
+    y_tilde[n] <- normal_rng(alpha + beta * x[n], sigma);
+}
+\end{stancode}
+%
+Given observed predictors $x$ and outcomes $y$, \code{y\_tilde} will
+be drawn according to $p(\tilde{y} \, | \, \tilde{x}, y, x)$.  This
+means that, for example, the posterior mean for \code{y\_tilde} is the
+estimate of the outcome that minimizes expected square error
+(conditioned on the data and model, of course).
+
+\subsubsection{Posterior Predictive Checks}
+
+A good way to investigate the fit of a model to the data, a critical
+step in Bayesian data analysis, is to generate simulated data
+according to the parameters of the model.  This is carried out with
+exactly the same procedure as before, only the observed data
+predictors $x$ are used in place of new predictors $\tilde{x}$ for
+unobserved outcomes.  If the model fits the data well, the predictions
+for $\tilde{y}$ based on $x$ should match the observed data $y$.
+
+To code posterior predictive checks in Stan requires only a slight
+modification of the prediction code to use $x$ and $N$ in place of
+$\tilde{x}$ and $\tilde{N}$,
+%
+\begin{stancode}
+generated quantities {
+  vector[N] y_tilde;
+  for (n in 1:N)
+    y_tilde <- normal_rng(alpha + beta * x[n], sigma);
+}
+\end{stancode}
+%
+\cite{GelmanEtAl:2013} recommend choosing several posterior draws
+$\tilde{y}^{(1)}, \ldots, \tilde{y}^{(M)}$ and plotting each of them
+alongside the data $y$ that was actually observed.  If the model fits
+well, the simulated $\tilde{y}$ will look like the actual data $y$.
+
+
+\section{Cumulative Distribution Functions}
+
+For most of the univariate probability functions, there is a
+corresponding cumulative distribution function, log cumulative
+distribution function, and log complementary cumulative distribution
+function.
+
+For a univariate random variable $Y$ with probability function $p_Y(y \,
+| \, \theta)$, the cumulative distribution function (CDF) $F_Y$ is
+defined by
+\[
+F_Y(y) 
+\ = \
+\mbox{Pr}[Y < y] 
+\ = \
+\int_0^y p(y \, | \, \theta) \ \mathrm{d}\theta.
+\]
+The complementary cumulative distribution function (CCDF) is defined
+as 
+\[
+\mbox{Pr}[Y \geq y]
+\ = \
+1 - F_Y(y).
+\]
+The reason to use CCDFs instead of CDFs in floating-point arithmetic
+is that it is possible to represent numbers very close to 0 (the
+closest you can get is roughly $10^{-300}$), but not numbers very close
+to 1 (the closest you can get is roughly $1 - 10^{-15}$).
+
+In Stan, there is a cumulative distribution function for each
+probability function.  For instance, \code{normal\_cdf(y,~mu,~sigma)}
+is defined by 
+%
+\[
+\int_0^y \distro{Normal}(y \, | \, \mu, \sigma) \ \mathrm{d}y.
+\]
+%
+There are also log forms of the CDF and CCDF for most univariate
+distributions.  For example, \code{normal\_cdf\_log(y,~mu,~sigma)} is
+defined by
+%
+\[
+\log \left( \int_0^y \distro{Normal}(y \, | \, \mu, \sigma) \
+  \mathrm{d}y \right)
+\]
+%
+and \code{normal\_ccdf\_log(y,~mu,~sigma)} is defined by
+%
+\[
+\log \left( 1 - \int_0^y \distro{Normal}(y \, | \, \mu, \sigma) \
+  \mathrm{d}y \right).
+\]
+
+
+\section{Vectorization}\label{vectorization.section}
+
+\noindent
+Stan's univariate log probability functions, including the log density
+functions, log mass functions, log CDFs, and log CCDFs, all support vectorized
+function application, with results defined to be the sum of the
+elementwise application of the function.
+
+In all cases, matrix operations are at least as fast and usually
+faster than loops and vectorized log probability functions are faster
+than their equivalent form defined with loops.  This isn't because
+loops are slow in Stan, but because more efficient automatic
+differentiation can be used.  The efficiency comes from the fact that
+a vectorized log probably function only introduces one new node into
+the expression graph, thus reducing the number of virtual function
+calls required to compute gradients in \Cpp, as well as from allowing
+caching of repeated computations.
+
+Stan also overloads the multivariate normal distribution, including
+the Cholesky-factor form, allowing arrays of row vectors or vectors
+for the variate and location parameter.  This is a huge savings in
+speed because the work required to solve the linear system for the
+covariance matrix is only done once.
+
+Stan also overloads some scalar functions, such as \code{log} and
+\code{exp}, to apply to vectors (arrays) and return vectors (arrays).  
+These vectorizations are defined elementwise and unlike the
+probability functions, provide only minimal efficiency speedups over
+repeated application and assignment in a loop.
+
+
+\subsection{Vectorized Function Signatures}\label{prob-vectorization.section}
+
+\subsubsection{Vectorized Scalar Arguments}
+
+The normal probability function is specified with the signature
+%
+\begin{stancode}
+normal_log(reals, reals, reals);
+\end{stancode}
+%
+The pseudo-type \code{reals} is used to indicate that an argument
+position may be vectorized.  Argument positions declared as
+\code{reals} may be filled with a real, a one-dimensional array, a
+vector, or a row-vector.  If there is more than one array or vector
+argument, their types can be anything but their size must match.  For
+instance, it is legal to use
+\code{normal\_log(row\_vector,~vector,~real)} as long as the vector and
+row vector have the same size.  
+
+\subsubsection{Vectorized Vector and Row Vector Arguments}
+
+The multivariate normal distribution accepting vector or array of
+vector arguments is written as
+%
+\begin{stancode}
+multi_normal_log(vectors, vectors, matrix);
+\end{stancode}
+%
+These arguments may be row vectors, column vectors, or arrays of row
+vectors or column vectors.
+
+\subsubsection{Vectorized Integer Arguments}
+
+The pseudo-type \code{ints} is used for vectorized integer arguments.
+Where it appears either an integer or array of integers may be used.
+
+
+\subsection{Evaluating Vectorized Functions}
+
+The result of a vectorized log probability function is equivalent to
+the sum of the evaluations on each element.  Any non-vector argument,
+namely \code{real} or \code{int}, is repeated.  For instance, if
+\code{y} is a vector of size \code{N}, \code{mu} is a vector of size
+\code{N}, and \code{sigma} is a scalar, then
+%
+\begin{stancode}
+ll <- normal_log(y, mu, sigma);
+\end{stancode}
+%
+is just a more efficient way to write
+%
+\begin{stancode}
+ll <- 0;
+for (n in 1:N)
+  ll <- ll + normal_log(y[n], mu[n], sigma);
+\end{stancode}
+%
+With the same arguments, the vectorized sampling statement
+%
+\begin{stancode}
+y ~ normal(mu, sigma);
+\end{stancode}
+%
+has the same effect on the total log probability as
+%
+\begin{stancode}
+for (n in 1:N)
+  y[n] ~ normal(mu[n], sigma);
+\end{stancode}
 
 
 
@@ -39,7 +313,7 @@ where 1 represents the value true and 0 the value false.
 
 \subsubsection{Probability Mass Function}
 
-If $\theta \in [0,1]$, then for $y \in \setlist{0,1}$, 
+If $\theta \in [0,1]$, then for $y \in \setlist{0,1}$,
 \[
 \distro{Bernoulli}(y|\theta)
 =
@@ -73,11 +347,11 @@ If $\theta \in [0,1]$, then for $y \in \setlist{0,1}$,
   \farg{theta}}
 %
 \fitem{real}{bernoulli\_cdf\_log}{ints \farg{y}, reals \farg{theta}}{The
-  log of the Bernoulli cumulative distribution function of \farg{y} given 
+  log of the Bernoulli cumulative distribution function of \farg{y} given
   chance of success \farg{theta}}
 %
 \fitem{real}{bernoulli\_ccdf\_log}{ints \farg{y}, reals \farg{theta}}{The
-  log of the Bernoulli complementary cumulative distribution function of 
+  log of the Bernoulli complementary cumulative distribution function of
   \farg{y} given chance of success \farg{theta}}
 \end{description}
 %
@@ -93,7 +367,7 @@ If $\theta \in [0,1]$, then for $y \in \setlist{0,1}$,
 logit-transformed chance-of-success parameter.  This parameterization
 is more numerically stable if the chance-of-success parameter is on
 the logit scale, as with the linear predictor in a logistic
-regression.  
+regression.
 
 \subsubsection{Probability Mass Function}
 
@@ -102,7 +376,7 @@ If $\alpha \in \reals$, then for $c \in \setlist{0,1}$,
 \distro{BernoulliLogit}(c|\alpha)
 =
 \distro{Bernoulli}(c|\mbox{logit}^{-1}(\alpha))
-= 
+=
 \left\{
 \begin{array}{ll}
 \mbox{logit}^{-1}(\alpha) & \mbox{if } y = 1, \mbox{ and}
@@ -152,7 +426,7 @@ Suppose $N \in \nats$ and $\theta \in [0,1]$, and $n \in
 & = &
 \log \Gamma(N+1) - \log \Gamma(n + 1) - \log \Gamma(N- n + 1)
 \\[4pt]
-& & { } + n \log \theta + (N - n) \log (1 - \theta), 
+& & { } + n \log \theta + (N - n) \log (1 - \theta),
 \end{eqnarray*}
 
 
@@ -165,7 +439,7 @@ Suppose $N \in \nats$ and $\theta \in [0,1]$, and $n \in
 \]
 
 
-\pitem{n}{binomial}{N,theta}
+\pitem{n}{binomial}{N, theta}
 
 \subsubsection{Stan Functions}
 
@@ -180,11 +454,11 @@ Suppose $N \in \nats$ and $\theta \in [0,1]$, and $n \in
     successes in \farg{N} trials given chance of success \farg{theta}}
 %
   \fitem{real}{binomial\_cdf\_log}{ints \farg{n}, ints \farg{N}, reals
-    \farg{theta}}{The log of the binomial cumulative distribution function of 
+    \farg{theta}}{The log of the binomial cumulative distribution function of
     \farg{n} successes in \farg{N} trials given chance of success \farg{theta}}
 %
   \fitem{real}{binomial\_ccdf\_log}{ints \farg{n}, ints \farg{N}, reals
-    \farg{theta}}{The log of the binomial complementary cumulative distribution 
+    \farg{theta}}{The log of the binomial complementary cumulative distribution
      function of \farg{n} successes in \farg{N} trials given chance of success
     \farg{theta}}
 %
@@ -202,7 +476,7 @@ Suppose $N \in \nats$ and $\theta \in [0,1]$, and $n \in
 
 Stan also provides a version of the binomial probability mass function
 distribution with the chance of success parameterized on the
-unconstrained logistic scale.  
+unconstrained logistic scale.
 
 \subsubsection{Probability Mass Function}
 
@@ -226,7 +500,7 @@ Suppose $N \in \nats$, $\alpha \in \reals$, and $n \in
 \log \Gamma(N+1) - \log \Gamma(n + 1) - \log \Gamma(N- n + 1)
 \\[4pt]
 & & { } + n \log \mbox{logit}^{-1}(\alpha) + (N - n) \log \left( 1 -
-  \mbox{logit}^{-1}(\alpha) \right), 
+  \mbox{logit}^{-1}(\alpha) \right),
 \end{eqnarray*}
 
 
@@ -238,7 +512,7 @@ Suppose $N \in \nats$, $\alpha \in \reals$, and $n \in
 - \frac{N - n}{\mbox{logit}^{-1}(\alpha)}
 \]
 
-\pitem{n}{binomial\_logit}{N,alpha}
+\pitem{n}{binomial\_logit}{N, alpha}
 
 \subsubsection{Stan Functions}
 
@@ -260,7 +534,7 @@ If $N \in \nats$, $\alpha \in \posreals$, and $\beta \in \posreals$,
 then for $n \in \setlist{0,\ldots,N}$,
 \[
 \distro{BetaBinomial}(n|N,\alpha,\beta)
-= 
+=
 \binom{N}{n} \frac{\Betafun(n+\alpha, N -n +
   \beta)}{\Betafun(\alpha,\beta)},
 \]
@@ -273,7 +547,7 @@ where the beta function $\Betafun(u,v)$ is defined for $u \in
 = \frac{\Gamma(u) \ \Gamma(v)}{\Gamma(u + v)}.
 \]
 
-\pitem{n}{beta\_binomial}{N,alpha,beta}
+\pitem{n}{beta\_binomial}{N, alpha, beta}
 
 \subsubsection{Stan Functions}
 
@@ -301,15 +575,15 @@ where the beta function $\Betafun(u,v)$ is defined for $u \in
 %
 \fitem{real}{beta\_binomial\_ccdf\_log}{ints \farg{n}, ints \farg{N}, reals
   \farg{alpha}, reals \farg{beta}}{The log of the beta-binomial complementary
-   cumulative distribution function of \farg{n} successes in \farg{N} trials 
-   given prior success count (plus one) of \farg{alpha} and prior failure count 
+   cumulative distribution function of \farg{n} successes in \farg{N} trials
+   given prior success count (plus one) of \farg{alpha} and prior failure count
   (plus one) of \farg{beta}}
 \end{description}
 %
 \begin{description}
-\fitem{int}{beta\_binomial\_rng}{int \farg{N}, real \farg{alpha}, real 
-   \farg{beta}}{Generate a beta-binomial variate with \farg{N} trials, prior 
-   success count (plus one) of \farg{alpha}, and prior failure count (plus 
+\fitem{int}{beta\_binomial\_rng}{int \farg{N}, real \farg{alpha}, real
+   \farg{beta}}{Generate a beta-binomial variate with \farg{N} trials, prior
+   success count (plus one) of \farg{alpha}, and prior failure count (plus
    one) of \farg{beta}; may only be used in generated quantities block}
 \end{description}
 
@@ -321,7 +595,7 @@ where the beta function $\Betafun(u,v)$ is defined for $u \in
 \subsubsection{Probability Mass Function}
 
 If $a \in \nats$, $b \in \nats$, and $N \in \setlist{0,\ldots,a+b}$,
-then for $n \in \setlist{\max(0,N-b),\ldots,\min(a,N)}$, 
+then for $n \in \setlist{\max(0,N-b),\ldots,\min(a,N)}$,
 \[
 \distro{Hypergeometric}(n|N,a,b)
 =
@@ -330,7 +604,7 @@ then for $n \in \setlist{\max(0,N-b),\ldots,\min(a,N)}$,
 \]
 
 
-\pitem{n}{hypergeometric}{N,a,b}
+\pitem{n}{hypergeometric}{N, a, b}
 
 \subsubsection{Stan Functions}
 
@@ -345,9 +619,9 @@ then for $n \in \setlist{\max(0,N-b),\ldots,\min(a,N)}$,
 \end{description}
 %
 \begin{description}
-\fitem{int}{hypergeometric\_rng}{int \farg{N}, real \farg{a}, real 
-   \farg{b}}{Generate a hypergeometric variate with \farg{N} trials, total 
-    success count of \farg{a}, and total failure count of \farg{b}; may only 
+\fitem{int}{hypergeometric\_rng}{int \farg{N}, real \farg{a}, real
+   \farg{b}}{Generate a hypergeometric variate with \farg{N} trials, total
+    success count of \farg{a}, and total failure count of \farg{b}; may only
     be used in generated quantities block}
 \end{description}
 
@@ -366,7 +640,7 @@ $y \in \setlist{1,\ldots,N}$,
 \distro{Categorical}(y|\theta) = \theta_y.
 \]
 %
-In addition, Stan provides a log-odds scaled categorical distribution, 
+In addition, Stan provides a log-odds scaled categorical distribution,
 %
 \[
 \distro{CategoricalLogit}(y|\beta)
@@ -384,7 +658,7 @@ See \refsection{softmax} for the definition of the softmax function.
 
 All of the categorical distributions are vectorized so that the
 outcome \farg{y} can be a single integer (type \code{int}) or an array
-of integers (type \code{int[]}).  
+of integers (type \code{int[]}).
 
 
 \begin{description}
@@ -403,7 +677,7 @@ of integers (type \code{int[]}).
 %
 \begin{description}
 \fitem{int}{categorical\_rng}{vector \farg{theta}}{Generate a
-  categorical variate with $N$-simplex distribution parameter 
+  categorical variate with $N$-simplex distribution parameter
 \farg{theta}; may only be used in generated quantities block}
 \end{description}
 
@@ -438,7 +712,7 @@ The $k=1$ and $k=K$ edge cases can be subsumed into the general definition
 by setting $c_0 = -\infty$ and $c_K = +\infty$ with
 $\mbox{logit}^{-1}(-\infty) = 0$ and $\mbox{logit}^{-1}(\infty) = 1$.
 
-\pitem{k}{ordered\_logistic}{eta,c}
+\pitem{k}{ordered\_logistic}{eta, c}
 
 
 \subsubsection{Stan Functions}
@@ -449,7 +723,7 @@ $\mbox{logit}^{-1}(-\infty) = 0$ and $\mbox{logit}^{-1}(\infty) = 1$.
     \farg{k} given linear predictor \farg{eta} and cutpoints
     \farg{c}.}
 %
-\fitem{int}{ordered\_logistic\_rng}{real \farg{eta}, vector \farg{c}}{Generate 
+\fitem{int}{ordered\_logistic\_rng}{real \farg{eta}, vector \farg{c}}{Generate
   an ordered logistic variate with linear predictor \farg{eta} and cutpoints
     \farg{c}; may only be used in generated quantities block}
 \end{description}
@@ -466,16 +740,15 @@ numbers (i.e., the non-negative integers).
 \section{Negative Binomial Distribution}
 
 For the negative binomial distribution Stan uses the parameterization
-described in \citet{GelmanEtAl:2013}.
-For an alternative parametrization, see section \ref{sec:nbalt}
+described in \citet{GelmanEtAl:2013}.  For alternative parametrizations, see \refsection{nbalt}.
 
 \subsubsection{Probability Mass Function}
 
 If $\alpha \in \posreals$ and $\beta \in \posreals$, then for $y \in
 \nats$,
 \[
-\distro{NegativeBinomial}(y|\alpha,\beta)
- = 
+\distro{NegBinomial}(y|\alpha,\beta)
+ =
 \binom{y + \alpha - 1}{\alpha - 1}
 \,
 \left( \frac{\beta}{\beta+1} \right)^{\!\alpha}
@@ -485,17 +758,17 @@ If $\alpha \in \posreals$ and $\beta \in \posreals$, then for $y \in
 
 % DON'T REMOVE --- WE MAY INCLUDE ALL THESE IN THE FUTURE ELSEWHERE
 % \begin{eqnarray*}
-% \log \distro{NegativeBinomial}(y|\alpha,\beta)
-% & = & \log \Gamma(y + \alpha) 
+% \log \distro{NegBinomial}(y|\alpha,\beta)
+% & = & \log \Gamma(y + \alpha)
 %   - \log \Gamma(y + 1)
 %   - \log \Gamma(\alpha)
 % \\[4pt]
-% & & 
+% & &
 %   {} + \alpha \left(\log \beta - \log (\beta + 1) \right)
 %   - y \log (\beta + 1)
 % \end{eqnarray*}
 % \[
-% \frac{\partial}{\partial \alpha} 
+% \frac{\partial}{\partial \alpha}
 % \log \distro{NegativeBinomial}(y|\alpha,\beta)
 % = \Psi(y + \alpha)
 % - \Psi(\alpha)
@@ -503,22 +776,22 @@ If $\alpha \in \posreals$ and $\beta \in \posreals$, then for $y \in
 % - \log (\beta + 1)
 % \]
 % \[
-% \frac{\partial}{\partial \beta} 
-% \log \distro{NegativeBinomial}(y|\alpha,\beta)
+% \frac{\partial}{\partial \beta}
+% \log \distro{NegBinomial}(y|\alpha,\beta)
 % = \frac{\alpha}{\beta} - \frac{\alpha + y}{\beta + 1}
 % \]
 % where $\Psi$ is the digamma function (see
 % \refsection{digamma-appendix} for a definition).
 
 The mean and variance of a random variable $y \sim
-\distro{NegativeBinomial}(\alpha,\beta)$ are given by
+\distro{NegBinomial}(\alpha,\beta)$ are given by
 \[
-\mathbb{E}[y] = \frac{\alpha}{\beta} 
-\ \ \mbox{ and } \ \ 
+\mathbb{E}[y] = \frac{\alpha}{\beta}
+\ \ \mbox{ and } \ \
 \mbox{Var}[Y] = \frac{\alpha}{\beta^2} (\beta + 1).
 \]
 
-\pitem{n}{neg\_binomial}{alpha,beta}
+\pitem{n}{neg\_binomial}{alpha, beta}
 
 \subsubsection{Stan Functions}
 
@@ -539,31 +812,31 @@ The mean and variance of a random variable $y \sim
    of \farg{n} given shape \farg{alpha} and inverse scale \farg{beta}}
 %
  \fitem{real}{neg\_binomial\_ccdf\_log}{ints \farg{n}, reals
-   \farg{alpha}, reals \farg{beta}}{The log of the negative binomial 
-   complementary cumulative distribution function of \farg{n} 
+   \farg{alpha}, reals \farg{beta}}{The log of the negative binomial
+   complementary cumulative distribution function of \farg{n}
    given shape \farg{alpha} and inverse scale \farg{beta}}
 %
 \fitem{int}{neg\_binomial\_rng}{real \farg{alpha}, real \farg{beta}}{Generate a
   negative binomial variate with shape \farg{alpha} and inverse scale
-\farg{beta}; may only be used in generated quantities block. \farg{alpha} $/$ \farg{beta} 
+\farg{beta}; may only be used in generated quantities block. \farg{alpha} $/$ \farg{beta}
 must be less than $2 ^ {29}$}
 \end{description}
 
 
-
-\section{Negative Binomial Distribution, alternative parameterization}
-\label{sec:nbalt}
+\section{Negative Binomial Distribution (alternative parameterization)}\label{nbalt.section}
 
 Stan also provides an alternative parameterization of the negative
-binomial distribution using the mean and inverse scale
-(overdispersion) as parameters.
+binomial distribution directly using a mean (i.e., location) parameter
+and a parameter that controls overdispersion relative to the square of
+the mean.  \refsection{neg-binom-2-log}, below, provides a second
+alternative parameterization directly in terms of the log mean.
 
 \subsubsection{Probability Mass Function}
 
-If $\eta \in \reals$, $\mu \in \posreals$ and $\phi \in \posreals$,
-then for $y \in \nats$,
+The first parameterization is for $\mu \in \posreals$ and $\phi \in
+\posreals$, which for $y \in \nats$ is defined as
 \[
-\distro{NegativeBinomial2}(y|\mu,\phi)
+\distro{NegBinomial2}(y \, | \, \mu, \phi)
  =
 \binom{y + \phi - 1}{y}
 \,
@@ -571,19 +844,21 @@ then for $y \in \nats$,
 \,
 \left( \frac{\phi}{\mu+\phi} \right)^{\!\phi} \!.
 \]
+
 The mean and variance of a random variable $y \sim
-\distro{NegativeBinomial2}(y|\mu,\phi)$ are
+\distro{NegBinomial2}(y|\mu,\phi)$ are
 \[
-\mathbb{E}[Y] = \mu = e^\eta 
+\mathbb{E}[Y] = \mu
 \ \ \ \mbox{ and } \ \ \
 \mbox{Var}[Y] = \mu + \frac{\mu^2}{\phi}.
 \]
-The parameter $\phi$ represents precision, whereas its inverse,
-$\phi^{-1}$, represents overdispersion.
+Recall that $\distro{Poisson}(\mu)$ has variance $\mu$, so $\mu^2 /
+\phi > 0$ is the additional variance of the negative binomial above
+that of the Poisson with mean $\mu$.  So the inverse of parameter
+$\phi$ controls the overdispersion, scaled by the square of the mean,
+$\mu^2$.
 
 \pitem{y}{neg\_binomial\_2}{mu, phi}
-
-\pitem{y}{neg\_binomial\_2\_log}{eta, phi}
 
 \subsubsection{Stan Functions}
 
@@ -593,12 +868,6 @@ $\phi^{-1}$, represents overdispersion.
    \farg{mu}, reals \farg{phi}}{The negative binomial probability
    mass of \farg{n} given location \farg{mu} and precision
    \farg{phi}.}
-%
- \fitem{real}{neg\_binomial\_2\_log\_log}{ints \farg{y}, reals
-   \farg{eta}, reals \farg{phi}}{The log negative binomial probability
-   mass of \farg{n} given log-location \farg{eta} and precision
-   \farg{phi}. This is especially useful for log-linear negative
-   binomial regressions.}
 %
  \fitem{real}{neg\_binomial\_2\_cdf}{ints \farg{n}, reals
    \farg{mu}, reals \farg{phi}}{The negative binomial cumulative
@@ -611,7 +880,7 @@ $\phi^{-1}$, represents overdispersion.
    given location \farg{mu} and precision  \farg{phi}.}
 %
  \fitem{real}{neg\_binomial\_2\_ccdf\_log}{ints \farg{n}, reals
-   \farg{mu}, reals \farg{phi}}{The log of the negative binomial 
+   \farg{mu}, reals \farg{phi}}{The log of the negative binomial
    complementary cumulative distribution function of \farg{n}
    given location \farg{mu} and precision \farg{phi}.}
 %
@@ -621,12 +890,42 @@ $\phi^{-1}$, represents overdispersion.
   generated quantities block.
   \farg{mu} must be less than $2 ^ {29}$.}
 %
-\fitem{int}{neg\_binomial\_2\_log\_rng}{real \farg{eta}, real \farg{phi}}{
-  Generate a negative binomial variate with log-location \farg{eta}
-  and precision \farg{phi}; may only be used in generated
-  quantities block. \farg{eta} must be less than $29 \log 2$.}
 \end{description}
 
+\section{Negative Binomial Distribution (log alternative parameterization)}\label{neg-binom-2-log.section}
+
+Related to the parameterization in \refsection{nbalt}, the following
+parameterization uses a log mean parameter $\eta = \log(\mu)$, defined
+for $\eta \in \reals$, $\phi \in \posreals$, so that for $y \in \nats$,
+%
+\[
+\distro{NegBinomial2Log}(y \, | \, \eta, \phi)
+=
+\distro{NegBinomial2}(y | \exp(\eta), \phi).
+\]
+%
+This alternative may be used for sampling, as a function, and for
+random number generation, but as of yet, there are no CDFs implemented
+for it.
+
+\pitem{y}{neg\_binomial\_2\_log}{eta, phi}
+
+\section{Stan Functions}
+
+\begin{description}
+%
+  \fitem{real}{neg\_binomial\_2\_log\_log}{ints \farg{y}, reals
+    \farg{eta}, reals \farg{phi}}{The log negative binomial
+    probability mass of \farg{n} given log-location \farg{eta} and
+    inverse overdispersion control \farg{phi}. This is especially
+    useful for log-linear negative binomial regressions.}
+%
+\fitem{int}{neg\_binomial\_2\_log\_rng}{real \farg{eta}, real \farg{phi}}{
+  Generate a negative binomial variate with log-location \farg{eta}
+  and inverse overdispersion control \farg{phi}; may only be used in generated
+  quantities block. \farg{eta} must be less than $29 \log 2$.}
+%
+\end{description}
 
 \section{Poisson Distribution}\label{poisson.section}
 
@@ -635,10 +934,10 @@ $\phi^{-1}$, represents overdispersion.
 If $\lambda \in \posreals$, then for $n \in \nats$,
 \[
 \distro{Poisson}(n|\lambda)
-= 
+=
 \frac{1}{n!}
 \,
-\lambda^n 
+\lambda^n
 \,
 \exp(-\lambda).
 \]
@@ -654,14 +953,14 @@ If $\lambda \in \posreals$, then for $n \in \nats$,
 \fitem{real}{poisson\_cdf}{ints \farg{n}, reals \farg{lambda}}{The
   Poisson cumulative distribution function of \farg{n} given rate \farg{lambda}}
 %
-\fitem{real}{poisson\_cdf\_log}{ints \farg{n}, reals \farg{lambda}}{The log of the 
+\fitem{real}{poisson\_cdf\_log}{ints \farg{n}, reals \farg{lambda}}{The log of the
   Poisson cumulative distribution function of \farg{n} given rate \farg{lambda}}
 %
-\fitem{real}{poisson\_ccdf\_log}{ints \farg{n}, reals \farg{lambda}}{The log of the 
+\fitem{real}{poisson\_ccdf\_log}{ints \farg{n}, reals \farg{lambda}}{The log of the
   Poisson complementary cumulative distribution function of \farg{n} given rate \farg{lambda}}
 %
-\fitem{int}{poisson\_rng}{real \farg{lambda}}{Generate a Poisson variate with 
-  rate \farg{lambda}; may only be used in generated quantities block. \farg{lambda} must be 
+\fitem{int}{poisson\_rng}{real \farg{lambda}}{Generate a Poisson variate with
+  rate \farg{lambda}; may only be used in generated quantities block. \farg{lambda} must be
 less than $2^{30}$.}
 \end{description}
 
@@ -680,7 +979,7 @@ function.
 If $\alpha \in \reals$, then for $n \in \nats$,
 \[
 \distro{PoissonLog}(n|\alpha)
-= 
+=
 \frac{1}{n!}
 \,
 \exp \left(n\alpha - \exp(\alpha) \right).
@@ -694,7 +993,7 @@ If $\alpha \in \reals$, then for $n \in \nats$,
 \fitem{real}{poisson\_log\_log}{ints \farg{n}, reals \farg{alpha}}{The
   log Poisson probability mass of \farg{n} given log rate \farg{alpha}}
 %
-\fitem{int}{poisson\_log\_rng}{real \farg{alpha}}{Generate a Poisson variate with 
+\fitem{int}{poisson\_log\_rng}{real \farg{alpha}}{Generate a Poisson variate with
 log rate \farg{alpha}; may only be used in generated quantities block. \farg{alpha} must
 be less than $30 \log 2$}
 \end{description}
@@ -737,7 +1036,7 @@ where the multinomial coefficient is defined by
     distribution parameter \farg{theta} and (implicit) total count
     \code{N = sum(\farg{y})}}
 %
-\fitem{vector}{multinomial\_rng}{vector \farg{theta}, int \farg{N}}{Generate a
+\fitem{int[]}{multinomial\_rng}{vector \farg{theta}, int \farg{N}}{Generate a
   multinomial variate with simplex distribution parameter \farg{theta} and 
   total count \farg{N}; may only be used in generated quantities block}
 \end{description}
@@ -771,7 +1070,7 @@ If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in
 \!.
 \]
 
-\pitem{y}{normal}{mu,sigma}
+\pitem{y}{normal}{mu, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -789,7 +1088,7 @@ If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in
   given location \farg{mu} and scale \farg{sigma}; normal\_cdf\_log will underflow to $-\infty$ for $\frac{{y}-{\mu}}{{\sigma}}$ below -37.5 and overflow to 0 for $\frac{{y}-{\mu}}{{\sigma}}$ above 8.25}
 %
 \fitem{real}{normal\_ccdf\_log}{reals \farg{y}, reals \farg{mu}, reals
-  \farg{sigma}}{The log of the complementary cumulative normal distribution 
+  \farg{sigma}}{The log of the complementary cumulative normal distribution
   of \farg{y} given location \farg{mu} and scale \farg{sigma}; normal\_ccdf\_log will overflow to 0 for $\frac{{y}-{\mu}}{{\sigma}}$ below -37.5 and underflow to $-\infty$ for $\frac{{y}-{\mu}}{{\sigma}}$ above 8.25}
 \end{description}
 %
@@ -815,36 +1114,36 @@ If $\mu \in \reals$, $\sigma \in \posreals$, and $\lambda \in
 .
 \]
 
-\pitem{y}{exp\_mod\_normal}{mu,sigma,lambda}
+\pitem{y}{exp\_mod\_normal}{mu, sigma, lambda}
 
 \subsubsection{Stan Functions}
 
 \begin{description}
   \fitemtwolines{real}{exp\_mod\_normal\_log}{reals \farg{y}, reals
-    \farg{mu}, reals \farg{sigma}}{reals \farg{lambda}}{The
+    \farg{mu}, reals \farg{sigma},}{reals \farg{lambda}}{The
     log of the exponentially modified normal density of \farg{y} given
     location \farg{mu}, scale \farg{sigma}, and shape \farg{lambda}}
 %
   \fitemtwolines{real}{exp\_mod\_normal\_cdf}{reals \farg{y}, reals \farg{mu},
-    reals \farg{sigma}}{reals \farg{lambda}}{The
-    exponentially modified normal cumulative distribution function of \farg{y} 
+    reals \farg{sigma},}{reals \farg{lambda}}{The
+    exponentially modified normal cumulative distribution function of \farg{y}
     given location \farg{mu}, scale \farg{sigma}, and shape \farg{lambda}}
 %
   \fitemtwolines{real}{exp\_mod\_normal\_cdf\_log}{reals \farg{y}, reals \farg{mu},
-<    reals \farg{sigma}}{reals \farg{lambda}}{The log of the
-    exponentially modified normal cumulative distribution function of \farg{y} 
+    reals \farg{sigma},}{reals \farg{lambda}}{The log of the
+    exponentially modified normal cumulative distribution function of \farg{y}
     given location \farg{mu}, scale \farg{sigma}, and shape \farg{lambda}}
 %
   \fitemtwolines{real}{exp\_mod\_normal\_ccdf\_log}{reals \farg{y}, reals \farg{mu},
-    reals \farg{sigma}}{reals \farg{lambda}}{The log of the
-    exponentially modified normal complementary cumulative distribution 
+    reals \farg{sigma},}{reals \farg{lambda}}{The log of the
+    exponentially modified normal complementary cumulative distribution
     function of \farg{y} given location \farg{mu}, scale \farg{sigma}, and shape \farg{lambda}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{exp\_mod\_normal\_rng}{real \farg{mu}, real \farg{sigma},
-real \farg{lambda}}{Generate a exponentially modified normal variate 
-with location \farg{mu}, scale \farg{sigma}, and shape \farg{lambda}; 
+real \farg{lambda}}{Generate a exponentially modified normal variate
+with location \farg{mu}, scale \farg{sigma}, and shape \farg{lambda};
 may only be used in generated quantities block}
 \end{description}
 
@@ -867,14 +1166,14 @@ then for $y \in \reals$,
 .
 \]
 
-\pitem{y}{skew\_normal}{mu,sigma,alpha}
+\pitem{y}{skew\_normal}{mu, sigma, alpha}
 
 \subsubsection{Stan Functions}
 
 \begin{description}
   \fitem{real}{skew\_normal\_log}{reals \farg{y}, reals \farg{mu}, reals
-    \farg{sigma}, reals \farg{alpha}}{The log of the skew normal density 
-	of \farg{y} given location \farg{mu}, scale \farg{sigma}, and 
+    \farg{sigma}, reals \farg{alpha}}{The log of the skew normal density
+	of \farg{y} given location \farg{mu}, scale \farg{sigma}, and
 	shape \farg{alpha}}
 %
 \fitem{real}{skew\_normal\_cdf}{reals \farg{y}, reals \farg{mu}, reals
@@ -888,7 +1187,7 @@ then for $y \in \reals$,
   \farg{sigma}, and shape \farg{alpha}}
 %
 \fitemtwolines{real}{skew\_normal\_ccdf\_log}{reals \farg{y}, reals \farg{mu}, reals
-  \farg{sigma}}{reals \farg{alpha}}{The log of the skew normal complementary 
+  \farg{sigma}}{reals \farg{alpha}}{The log of the skew normal complementary
    cumulative distribution function of \farg{y} given location \farg{mu}, scale
   \farg{sigma}, and shape \farg{alpha}}
 \end{description}
@@ -921,7 +1220,7 @@ then for $y \in \reals$,
 \! .
 \]
 
-\pitem{y}{student\_t}{nu,mu,sigma}
+\pitem{y}{student\_t}{nu, mu, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -944,14 +1243,14 @@ then for $y \in \reals$,
     \farg{sigma}}
 %
   \fitem{real}{student\_t\_ccdf\_log}{reals \farg{y}, reals \farg{nu}, reals
-    \farg{mu}, reals \farg{sigma}}{The log of the Student-$t$ complementary 
-    cumulative distribution function of \farg{y} given degrees of freedom 
+    \farg{mu}, reals \farg{sigma}}{The log of the Student-$t$ complementary
+    cumulative distribution function of \farg{y} given degrees of freedom
     \farg{nu}, location \farg{mu}, and scale \farg{sigma}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{student\_t\_rng}{real \farg{nu}, real \farg{mu}, real
-  \farg{sigma}}{Generate a Student-$t$ variate with degrees of freedom 
+  \farg{sigma}}{Generate a Student-$t$ variate with degrees of freedom
 \farg{nu}, location \farg{mu}, and scale \farg{sigma}; may only be used in
   generated quantities block}
 \end{description}
@@ -965,14 +1264,14 @@ then for $y \in \reals$,
 If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in \reals$,
 \[
 \distro{Cauchy}(y|\mu,\sigma)
-= 
+=
 \frac{1}{\pi \sigma}
 \
 \frac{1}{1 + \left((y - \mu)/\sigma\right)^2}
 .
 \]
 
-\pitem{y}{cauchy}{mu,sigma}
+\pitem{y}{cauchy}{mu, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -983,15 +1282,15 @@ If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in \reals$,
  \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{cauchy\_cdf}{reals \farg{y}, reals \farg{mu}, reals
- \farg{sigma}}{ The Cauchy cumulative distribution function of \farg{y} given 
+ \farg{sigma}}{ The Cauchy cumulative distribution function of \farg{y} given
   location \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{cauchy\_cdf\_log}{reals \farg{y}, reals \farg{mu}, reals
- \farg{sigma}}{ The log of the Cauchy cumulative distribution function 
+ \farg{sigma}}{ The log of the Cauchy cumulative distribution function
 	of \farg{y} given location \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{cauchy\_ccdf\_log}{reals \farg{y}, reals \farg{mu}, reals
- \farg{sigma}}{ The log of the Cauchy complementary cumulative distribution 
+ \farg{sigma}}{ The log of the Cauchy complementary cumulative distribution
   function of \farg{y} given location \farg{mu} and scale \farg{sigma}}
 \end{description}
 %
@@ -1006,15 +1305,19 @@ If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in \reals$,
 
 \subsubsection{Probability Density Function}
 
-If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in \reals$, 
+If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in \reals$,
 \[
 \distro{DoubleExponential}(y|\mu,\sigma)
-= \frac{1}{2\sigma} 
+= \frac{1}{2\sigma}
   \exp \left( - \, \frac{|y - \mu|}{\sigma} \right)
 .
 \]
+Note that the double exponential distribution is parameterized in
+terms of the scale, in contrast to the exponential distribution (see
+\refsection{exponential-distribution}), which is parameterized in
+terms of inverse scale.
 
-\pitem{y}{double\_exponential}{mu,sigma}
+\pitem{y}{double\_exponential}{mu, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -1039,7 +1342,7 @@ function of \farg{y} given location \farg{mu} and scale \farg{sigma}}
 \begin{description}
 \fitem{real}{double\_exponential\_rng}{real \farg{mu}, real
   \farg{sigma}}{Generate a double exponential variate with location
-  \farg{mu} and scale \farg{sigma}; may only be used in generated 
+  \farg{mu} and scale \farg{sigma}; may only be used in generated
   quantities block}
 \end{description}
 
@@ -1061,7 +1364,7 @@ If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in \reals$,
 \]
 
 
-\pitem{y}{logistic}{mu,sigma}
+\pitem{y}{logistic}{mu, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -1071,16 +1374,16 @@ reals \farg{sigma}}{ The log of the logistic density of \farg{y} given
 location \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{logistic\_cdf}{reals \farg{y}, reals \farg{mu},
-  reals \farg{sigma}}{ The logistic cumulative distribution function of 
+  reals \farg{sigma}}{ The logistic cumulative distribution function of
   \farg{y} given location \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{logistic\_cdf\_log}{reals \farg{y}, reals \farg{mu},
-  reals \farg{sigma}}{ The log of the logistic cumulative distribution 
+  reals \farg{sigma}}{ The log of the logistic cumulative distribution
   function of \farg{y} given location \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{logistic\_ccdf\_log}{reals \farg{y}, reals \farg{mu},
-  reals \farg{sigma}}{ The log of the logistic complementary cumulative 
-  distribution function of \farg{y} given location \farg{mu} and scale 
+  reals \farg{sigma}}{ The log of the logistic complementary cumulative
+  distribution function of \farg{y} given location \farg{mu} and scale
   \farg{sigma}}
 \end{description}
 %
@@ -1105,13 +1408,13 @@ If $\mu \in \reals$ and $\beta \in \posreals$, then for $y \in \reals$,
 .
 \]
 
-\pitem{y}{gumbel}{mu,beta}
+\pitem{y}{gumbel}{mu, beta}
 
 \subsubsection{Stan Functions}
 
 \begin{description}
   \fitem{real}{gumbel\_log}{reals \farg{y}, reals \farg{mu}, reals
-    \farg{beta}}{The log of the gumbel density of \farg{y} given location 
+    \farg{beta}}{The log of the gumbel density of \farg{y} given location
     \farg{mu} and scale \farg{beta}}
 %
 \fitem{real}{gumbel\_cdf}{reals \farg{y}, reals \farg{mu}, reals
@@ -1123,7 +1426,7 @@ If $\mu \in \reals$ and $\beta \in \posreals$, then for $y \in \reals$,
   given location \farg{mu} and scale \farg{beta}}
 %
 \fitem{real}{gumbel\_ccdf\_log}{reals \farg{y}, reals \farg{mu}, reals
-  \farg{beta}}{The log of the gumbel complementary cumulative distribution 
+  \farg{beta}}{The log of the gumbel complementary cumulative distribution
    function of \farg{y} given location \farg{mu} and scale \farg{beta}}
 \end{description}
 %
@@ -1146,7 +1449,7 @@ positive real numbers.
 \subsubsection{Probability Density Function}
 
 If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in
-\posreals$, 
+\posreals$,
 \[
 \distro{LogNormal}(y|\mu,\sigma)
 =
@@ -1161,7 +1464,7 @@ If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in
 .
 \]
 
-\pitem{y}{lognormal}{mu,sigma}
+\pitem{y}{lognormal}{mu, sigma}
 
 
 \subsubsection{Stan Functions}
@@ -1176,11 +1479,11 @@ If $\mu \in \reals$ and $\sigma \in \posreals$, then for $y \in
   given location \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{lognormal\_cdf\_log}{reals \farg{y}, reals \farg{mu}, reals
-  \farg{sigma}}{The log of the lognormal cumulative distribution fucntion 
+  \farg{sigma}}{The log of the lognormal cumulative distribution fucntion
    of \farg{y} given location \farg{mu} and scale \farg{sigma}}
 %
 \fitem{real}{lognormal\_ccdf\_log}{reals \farg{y}, reals \farg{mu}, reals
-  \farg{sigma}}{The log of the lognormal complementary cumulative distribution 
+  \farg{sigma}}{The log of the lognormal complementary cumulative distribution
   function of \farg{y} given location \farg{mu} and scale \farg{sigma}}
 \end{description}
 %
@@ -1218,15 +1521,15 @@ y^{\nu/2 - 1}
   \farg{nu}}
 %
 \fitem{real}{chi\_square\_cdf}{reals \farg{y}, reals \farg{nu}}{The
-   Chi-square cumulative distribution function of \farg{y} given degrees 
+   Chi-square cumulative distribution function of \farg{y} given degrees
    of freedom \farg{nu}}
 %
-\fitem{real}{chi\_square\_cdf\_log}{reals \farg{y}, reals \farg{nu}}{The 
-   log of the Chi-square cumulative distribution function of 
+\fitem{real}{chi\_square\_cdf\_log}{reals \farg{y}, reals \farg{nu}}{The
+   log of the Chi-square cumulative distribution function of
    \farg{y} given degrees of freedom \farg{nu}}
 %
-\fitem{real}{chi\_square\_ccdf\_log}{reals \farg{y}, reals \farg{nu}}{The 
-   log of the complementary Chi-square cumulative distribution 
+\fitem{real}{chi\_square\_ccdf\_log}{reals \farg{y}, reals \farg{nu}}{The
+   log of the complementary Chi-square cumulative distribution
    function of \farg{y} given degrees of freedom \farg{nu}}
 \end{description}
 %
@@ -1245,7 +1548,7 @@ y^{\nu/2 - 1}
 If $\nu \in \posreals$, then for $y \in \posreals$,
 \[
 \distro{InvChiSquare}(y|\nu)
-= 
+=
 \frac{2^{-\nu/2}}
    {\Gamma(\nu / 2)}
 \,
@@ -1266,21 +1569,21 @@ y^{-(\nu/2 - 1)}
   degrees of freedom \farg{nu}}
 %
 \fitem{real}{inv\_chi\_square\_cdf}{reals \farg{y}, reals
-  \farg{nu}}{The inverse Chi-squared cumulative distribution function of 
+  \farg{nu}}{The inverse Chi-squared cumulative distribution function of
   \farg{y} given degrees of freedom \farg{nu}}
 %
 \fitem{real}{inv\_chi\_square\_cdf\_log}{reals \farg{y}, reals
-  \farg{nu}}{The log of the inverse Chi-squared cumulative distribution 
+  \farg{nu}}{The log of the inverse Chi-squared cumulative distribution
    function of \farg{y} given degrees of freedom \farg{nu}}
 %
 \fitem{real}{inv\_chi\_square\_ccdf\_log}{reals \farg{y}, reals
-  \farg{nu}}{The log of the inverse Chi-squared complementary cumulative 
+  \farg{nu}}{The log of the inverse Chi-squared complementary cumulative
   distribution function of \farg{y} given degrees of freedom \farg{nu}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{inv\_chi\_square\_rng}{real \farg{nu}}{Generate an
-  inverse Chi-squared variate with degrees of freedom \farg{nu}; 
+  inverse Chi-squared variate with degrees of freedom \farg{nu};
 may only be used in generated quantities block}
 \end{description}
 
@@ -1293,7 +1596,7 @@ If $\nu \in \posreals$ and $\sigma \in \posreals$, then for $y \in
 \posreals$,
 \[
 \distro{ScaledInvChiSquare}(y|\nu,\sigma)
-= 
+=
 \frac{(\nu / 2)^{\nu/2}}
      {\Gamma(\nu / 2)}
 \,
@@ -1308,7 +1611,7 @@ y^{-(\nu/2 + 1)}
 \]
 
 
-\pitem{y}{scaled\_inv\_chi\_square}{nu,sigma}
+\pitem{y}{scaled\_inv\_chi\_square}{nu, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -1341,21 +1644,21 @@ y^{-(\nu/2 + 1)}
 %
 \begin{description}
 \fitem{real}{scaled\_inv\_chi\_square\_rng}{real \farg{nu}, real
-  \farg{sigma}}{Generate a scaled inverse Chi-squared variate with degrees 
-of freedom \farg{nu} and scale \farg{sigma}; may only be used in generated 
+  \farg{sigma}}{Generate a scaled inverse Chi-squared variate with degrees
+of freedom \farg{nu} and scale \farg{sigma}; may only be used in generated
 quantities block}
 \end{description}
 
 
-\section{Exponential Distribution}
+\section{Exponential Distribution}\label{exponential-distribution.section}
 
 \subsubsection{Probability Density Function}
 
 If $\beta \in \posreals$, then for $y \in \posreals$,
 \[
 \distro{Exponential}(y|\beta)
-= 
-\beta \, 
+=
+\beta \,
 \exp ( - \beta \, y )
 .
 \]
@@ -1373,17 +1676,17 @@ If $\beta \in \posreals$, then for $y \in \posreals$,
   \farg{beta}}
 %
 \fitem{real}{exponential\_cdf\_log}{reals \farg{y}, reals \farg{beta}}{The
-  log of the exponential cumulative distribution function of \farg{y} given 
+  log of the exponential cumulative distribution function of \farg{y} given
   inverse scale \farg{beta}}
 %
 \fitem{real}{exponential\_ccdf\_log}{reals \farg{y}, reals \farg{beta}}{The
-  log of the exponential complementary cumulative distribution function 
+  log of the exponential complementary cumulative distribution function
   of \farg{y} given inverse scale \farg{beta}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{exponential\_rng}{real \farg{beta}}{Generate an
-  exponential variate with inverse scale \farg{beta}; may only be used in 
+  exponential variate with inverse scale \farg{beta}; may only be used in
   generated quantities block}
 \end{description}
 
@@ -1406,7 +1709,7 @@ y^{\alpha - 1}
 \]
 
 
-\pitem{y}{gamma}{alpha,beta}
+\pitem{y}{gamma}{alpha, beta}
 
 \subsubsection{Stan Functions}
 
@@ -1424,14 +1727,14 @@ y^{\alpha - 1}
    \farg{alpha} and inverse scale \farg{beta}}
 %
  \fitem{real}{gamma\_ccdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-   \farg{beta}}{The log of the complementary cumulative gamma distribution function of 
+   \farg{beta}}{The log of the complementary cumulative gamma distribution function of
    \farg{y} given shape \farg{alpha} and inverse scale \farg{beta}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{gamma\_rng}{real \farg{alpha}, real
   \farg{beta}}{Generate a gamma variate with shape
-  \farg{alpha} and inverse scale \farg{beta}; may only be used in generated 
+  \farg{alpha} and inverse scale \farg{beta}; may only be used in generated
 quantities block}
 \end{description}
 
@@ -1444,7 +1747,7 @@ If $\alpha \in \posreals$ and $\beta \in \posreals$, then for $y \in
 \posreals$,
 \[
 \distro{InvGamma}(y|\alpha,\beta)
-= 
+=
 \frac{\beta^{\alpha}}
      {\Gamma(\alpha)}
 \
@@ -1454,7 +1757,7 @@ y^{-(\alpha + 1)}
 .
 \]
 
-\pitem{y}{inv\_gamma}{alpha,beta}
+\pitem{y}{inv\_gamma}{alpha, beta}
 
 
 \subsubsection{Stan Functions}
@@ -1465,22 +1768,22 @@ y^{-(\alpha + 1)}
   \farg{alpha} and scale \farg{beta}}
 %
 \fitem{real}{inv\_gamma\_cdf}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{beta}}{The inverse gamma cumulative distribution function of \farg{y} 
+  \farg{beta}}{The inverse gamma cumulative distribution function of \farg{y}
   given shape \farg{alpha} and scale \farg{beta}}
 %
 \fitem{real}{inv\_gamma\_cdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{beta}}{The log of the inverse gamma cumulative distribution function 
+  \farg{beta}}{The log of the inverse gamma cumulative distribution function
   of \farg{y} given shape \farg{alpha} and scale \farg{beta}}
 %
 \fitem{real}{inv\_gamma\_ccdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{beta}}{The log of the inverse gamma complementary cumulative distribution 
+  \farg{beta}}{The log of the inverse gamma complementary cumulative distribution
   function of \farg{y} given shape \farg{alpha} and scale \farg{beta}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{inv\_gamma\_rng}{real \farg{alpha}, real
   \farg{beta}}{Generate an inverse gamma variate with shape
-  \farg{alpha} and scale \farg{beta}; may only be used in generated 
+  \farg{alpha} and scale \farg{beta}; may only be used in generated
 quantities block}
 \end{description}
 
@@ -1490,10 +1793,10 @@ quantities block}
 \subsubsection{Probability Density Function}
 
 If $\alpha \in \posreals$ and $\sigma \in \posreals$, then for $y \in
-[0,\infty)$, 
+[0,\infty)$,
 \[
 \distro{Weibull}(y|\alpha,\sigma)
-= 
+=
 \frac{\alpha}{\sigma}
 \,
 \left( \frac{y}{\sigma} \right)^{\alpha - 1}
@@ -1505,7 +1808,7 @@ If $\alpha \in \posreals$ and $\sigma \in \posreals$, then for $y \in
 Note that if $Y \propto \distro{Weibull}(\alpha,\sigma)$,
 then $Y^{-1} \propto \distro{Frechet}(\alpha,\sigma^{-1})$.
 
-\pitem{y}{weibull}{alpha,sigma}
+\pitem{y}{weibull}{alpha, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -1519,19 +1822,19 @@ then $Y^{-1} \propto \distro{Frechet}(\alpha,\sigma^{-1})$.
   shape \farg{alpha} and scale \farg{sigma}}
 %
 \fitem{real}{weibull\_cdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{sigma}}{The log of the Weibull cumulative distribution function of 
+  \farg{sigma}}{The log of the Weibull cumulative distribution function of
   \farg{y} given shape \farg{alpha} and scale \farg{sigma}}
 %
 \fitem{real}{weibull\_ccdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{sigma}}{The log of the Weibull complementary cumulative 
-  distribution function of \farg{y} given shape \farg{alpha} and scale 
+  \farg{sigma}}{The log of the Weibull complementary cumulative
+  distribution function of \farg{y} given shape \farg{alpha} and scale
   \farg{sigma}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{weibull\_rng}{real \farg{alpha}, real
   \farg{sigma}}{Generate a weibull variate with shape
-  \farg{alpha} and scale \farg{sigma}; may only be used in generated 
+  \farg{alpha} and scale \farg{sigma}; may only be used in generated
 quantities block}
 \end{description}
 
@@ -1540,10 +1843,10 @@ quantities block}
 \subsubsection{Probability Density Function}
 
 If $\alpha \in \posreals$ and $\sigma \in \posreals$, then for $y \in
-\posreals$, 
+\posreals$,
 \[
 \distro{Frechet}(y|\alpha,\sigma)
-= 
+=
 \frac{\alpha}{\sigma}
 \,
 \left( \frac{y}{\sigma} \right)^{-\alpha - 1}
@@ -1555,7 +1858,7 @@ If $\alpha \in \posreals$ and $\sigma \in \posreals$, then for $y \in
 Note that if $Y \propto \distro{Frechet}(\alpha,\sigma)$,
 then $Y^{-1} \propto \distro{Weibull}(\alpha,\sigma^{-1})$.
 
-\pitem{y}{frechet}{alpha,sigma}
+\pitem{y}{frechet}{alpha, sigma}
 
 \subsubsection{Stan Functions}
 
@@ -1569,19 +1872,19 @@ then $Y^{-1} \propto \distro{Weibull}(\alpha,\sigma^{-1})$.
   shape \farg{alpha} and scale \farg{sigma}}
 %
 \fitem{real}{frechet\_cdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{sigma}}{The log of the Fr\'{e}chet cumulative distribution function of 
+  \farg{sigma}}{The log of the Fr\'{e}chet cumulative distribution function of
   \farg{y} given shape \farg{alpha} and scale \farg{sigma}}
 %
 \fitem{real}{frechet\_ccdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{sigma}}{The log of the Fr\'{e}chet complementary cumulative 
-  distribution function of \farg{y} given shape \farg{alpha} and scale 
+  \farg{sigma}}{The log of the Fr\'{e}chet complementary cumulative
+  distribution function of \farg{y} given shape \farg{alpha} and scale
   \farg{sigma}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{frechet\_rng}{real \farg{alpha}, real
   \farg{sigma}}{Generate an Fr\'{e}chet variate with shape
-  \farg{alpha} and scale \farg{sigma}; may only be used in generated 
+  \farg{alpha} and scale \farg{sigma}; may only be used in generated
 quantities block}
 \end{description}
 
@@ -1616,16 +1919,62 @@ non-negative real numbers.
  Rayleigh cumulative distribution of \farg{y} given scale \farg{sigma}}
 %
 \fitem{real}{rayleigh\_ccdf\_log}{real \farg{y}, real
-\farg{sigma}}{The log of the Rayleigh complementary cumulative distribution 
+\farg{sigma}}{The log of the Rayleigh complementary cumulative distribution
  of \farg{y} given scale \farg{sigma}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{rayleigh\_rng}{real
   \farg{sigma}}{Generate a Rayleigh variate with scale
-  \farg{sigma}; may only be used in generated 
+  \farg{sigma}; may only be used in generated
 quantities block}
 \end{description}
+
+\section{Wiener Diffusion Model Distributions}
+
+\subsubsection{Probability Density Function}
+ If $\alpha \in \posreals$, $\tau \in \posreals$,
+    $\beta \in [0, 1]$ and $\delta \in \reals$,
+ then for $y \in (0, \tau)$,
+\[
+\distro{Wiener}(y|\alpha, \tau, \beta, \delta)
+=
+\frac{\alpha}{(y-\tau)^3/2}
+\,
+\exp \! \left(- \delta \alpha \beta - \frac{\delta^2(y-\tau)}{2}\right)
+\,
+\sum_{k = - \infty}^{\infty} (2k + \beta)
+\,
+\phi \! \left(\frac{2k + \alpha \beta}{\sqrt{y - \tau}}\right)
+\!.
+\]
+
+where $\phi(x)$ denotes the standard
+normal density function \citep{Blurton2012}.
+
+\pitem{y}{wiener}{alpha, tau, beta, delta}
+
+\subsubsection{Stan Functions}
+\begin{description}
+\fitem{real}{wiener\_log}{reals \farg{y}, reals \farg{alpha},
+ reals \farg{tau}, reals \farg{beta}, reals \farg{delta}}
+ {The log of the Wiener first passage time
+ density of \farg{y} given boundary separation \farg{alpha},
+ non-decision time \farg{tau}, a-priori bias \farg{beta} and
+ drift rate \farg{delta}}
+\end{description}
+
+\subsubsection{Boundaries}
+
+Stan returns the first passage time of the accumulation process
+over the upper boundary only. Therefore, one needs to calculate:
+\[
+\distro{wiener}(y|\alpha, \tau, 1 - \beta, - \delta).
+\]
+
+To get the result for the lower
+boundary. For more details, see the appendix of
+\citet{Vandekerckhove-Wabersich:2014}.
 
 \chapter{Positive Lower-Bounded Probabilities}
 
@@ -1639,14 +1988,14 @@ above some positive minimum value.
 \subsubsection{Probability Density Function}
 
 If $y_{\mbox{\footnotesize\rm min}} \in \posreals$ and $\alpha \in \posreals$, then for
-$y \in \posreals$ with $y \geq y_{\mbox{\footnotesize\rm min}}$, 
+$y \in \posreals$ with $y \geq y_{\mbox{\footnotesize\rm min}}$,
 \[
 \distro{Pareto}(y|y_{\mbox{\footnotesize\rm min}},\alpha)
 =
 \frac{\displaystyle \alpha\,y_{\mbox{\footnotesize\rm min}}^\alpha}{\displaystyle y^{\alpha+1}}.
 \]
 
-\pitem{y}{pareto}{y\_min,alpha}
+\pitem{y}{pareto}{y\_min, alpha}
 
 \subsubsection{Stan Functions}
 
@@ -1660,19 +2009,19 @@ $y \in \posreals$ with $y \geq y_{\mbox{\footnotesize\rm min}}$,
     positive minimum value \farg{y\_min} and shape \farg{alpha}}
 %
   \fitem{real}{pareto\_cdf\_log}{reals \farg{y}, reals \farg{y\_min}, reals
-    \farg{alpha}}{The log of the Pareto cumulative distribution function of 
+    \farg{alpha}}{The log of the Pareto cumulative distribution function of
     \farg{y} given positive minimum value \farg{y\_min} and shape \farg{alpha}}
 %
   \fitem{real}{pareto\_ccdf\_log}{reals \farg{y}, reals \farg{y\_min}, reals
     \farg{alpha}}{The log of the Pareto complementary cumulative distribution
-    function of \farg{y} given positive minimum value \farg{y\_min} and shape 
+    function of \farg{y} given positive minimum value \farg{y\_min} and shape
     \farg{alpha}}
 \end{description}
 %
 \begin{description}
 \fitem{real}{pareto\_rng}{real \farg{y\_min}, real
-  \farg{alpha}}{Generate a Pareto variate with positive minimum value 
-  \farg{y\_min} and shape \farg{alpha}; may only be used in generated 
+  \farg{alpha}}{Generate a Pareto variate with positive minimum value
+  \farg{y\_min} and shape \farg{alpha}; may only be used in generated
   quantities block}
 \end{description}
 
@@ -1684,7 +2033,7 @@ If $\mu \in \reals$, $\lambda \in \posreals$, and $\alpha \in \posreals$, then f
 $y \geq \mu$,
 \[
 \distro{Pareto\_Type\_2}(y|\mu,\lambda,\alpha)
-= 
+=
 \ \frac{\alpha}{\lambda}
 \, \left( 1+\frac{y-\mu}{\lambda} \right)^{-(\alpha+1)}
 \! .
@@ -1692,7 +2041,7 @@ $y \geq \mu$,
 
 Note that the Lomax distribution is a Pareto Type 2 distribution with $\mu=0$.
 
-\pitem{y}{pareto\_type\_2}{mu,lambda,alpha}
+\pitem{y}{pareto\_type\_2}{mu, lambda, alpha}
 
 \subsubsection{Stan Functions}
 
@@ -1716,8 +2065,8 @@ Note that the Lomax distribution is a Pareto Type 2 distribution with $\mu=0$.
 %
 \begin{description}
 \fitem{real}{pareto\_type\_2\_rng}{real \farg{mu}, real \farg{lambda}, real
-  \farg{alpha}}{Generate a Pareto Type 2 variate with location 
-  \farg{mu}, scale \farg{lambda}, and shape \farg{alpha}; may only be used in generated 
+  \farg{alpha}}{Generate a Pareto Type 2 variate with location
+  \farg{mu}, scale \farg{lambda}, and shape \farg{alpha}; may only be used in generated
   quantities block}
 \end{description}
 
@@ -1744,16 +2093,16 @@ If $\alpha \in \posreals$ and $\beta \in \posreals$, then for $\theta
 \,
 (1 - \theta)^{\beta - 1}
 ,
-\] 
+\]
 where the beta function $\Betafun()$ is as defined in
-\refsection{betafun}.  
+\refsection{betafun}.
 
 {\it Warning:}\ If $\theta = 0$ or $\theta = 1$, then the probability
 is 0 and the log probability is $-\infty$.  Similarly, the
 distribution requires strictly positive parameters, $\alpha, \beta >
 0$.
 
-\pitem{theta}{beta}{alpha,beta}
+\pitem{theta}{beta}{alpha, beta}
 
 \subsubsection{Stan Functions}
 
@@ -1765,17 +2114,17 @@ distribution requires strictly positive parameters, $\alpha, \beta >
     \farg{alpha} and prior failures (plus one) \farg{beta}}
 %
   \fitem{real}{beta\_cdf}{reals \farg{theta}, reals \farg{alpha}, reals
-    \farg{beta}}{The beta cumulative distribution function of \code{theta} 
+    \farg{beta}}{The beta cumulative distribution function of \code{theta}
     in $[0,1]$ given positive prior successes (plus one)
     \farg{alpha} and prior failures (plus one) \farg{beta}}
 %
   \fitem{real}{beta\_cdf\_log}{reals \farg{theta}, reals \farg{alpha}, reals
-    \farg{beta}}{The log of the beta cumulative distribution function of 
+    \farg{beta}}{The log of the beta cumulative distribution function of
     \code{theta} in $[0,1]$ given positive prior successes (plus one)
     \farg{alpha} and prior failures (plus one) \farg{beta}}
 %
   \fitem{real}{beta\_ccdf\_log}{reals \farg{theta}, reals \farg{alpha}, reals
-    \farg{beta}}{The log of the beta complementary cumulative distribution 
+    \farg{beta}}{The log of the beta complementary cumulative distribution
     function of \code{theta} in $[0,1]$ given positive prior successes (plus one)
     \farg{alpha} and prior failures (plus one) \farg{beta}}
 \end{description}
@@ -1792,7 +2141,7 @@ distribution requires strictly positive parameters, $\alpha, \beta >
 
 \noindent
 Circular distributions are defined for finite values \farg{y} in any
-interval of length $2\pi$.  
+interval of length $2\pi$.
 
 
 \section{Von Mises Distribution}
@@ -1819,7 +2168,7 @@ because
 \]
 %
 Similarly, if $\mu$ is a parameter, it will typically be restricted to
-the same range as $y$.  
+the same range as $y$.
 
 A von Mises distribution with its $2 \pi$ interval of support centered
 around its location $\mu$ will have a single mode at $\mu$; for
@@ -1831,7 +2180,7 @@ the mode.  Ideally, the parameterization and support will be set up so
 that the bulk of the probability mass is in a continuous interval
 around the mean $\mu$.
 
-\pitem{y}{von\_mises}{mu,kappa}
+\pitem{y}{von\_mises}{mu, kappa}
 
 \subsubsection{Stan Functions}
 
@@ -1863,9 +2212,9 @@ The workaround is to replace \Verb|y ~ von_mises(mu,kappa)| with
 \begin{stancode}
 if (kappa < 100)
   y ~ von_mises(mu, kappa);
-else 
+else
   y ~ normal(mu, sqrt(1 / kappa));
-\end{stancode} 
+\end{stancode}
 
 
 \chapter{Bounded Continuous Probabilities}
@@ -1884,12 +2233,12 @@ If $\alpha \in \reals$ and $\beta \in (\alpha,\infty)$, then for $y
 \in [\alpha,\beta]$,
 \[
 \distro{Uniform}(y|\alpha,\beta)
-= 
+=
 \frac{1}{\beta - \alpha}
 .
 \]
 
-\pitem{y}{uniform}{alpha,beta}
+\pitem{y}{uniform}{alpha, beta}
 
 \subsubsection{Stan Functions}
 
@@ -1899,16 +2248,16 @@ If $\alpha \in \reals$ and $\beta \in (\alpha,\infty)$, then for $y
   \farg{alpha} and upper bound \farg{beta}}
 %
 \fitem{real}{uniform\_cdf}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{beta}}{The uniform cumulative distribution function of \farg{y} given 
+  \farg{beta}}{The uniform cumulative distribution function of \farg{y} given
   lower bound \farg{alpha} and upper bound \farg{beta}}
 %
 \fitem{real}{uniform\_cdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{beta}}{The log of the uniform cumulative distribution function of 
+  \farg{beta}}{The log of the uniform cumulative distribution function of
   \farg{y} given lower bound \farg{alpha} and upper bound \farg{beta}}
 %
 \fitem{real}{uniform\_ccdf\_log}{reals \farg{y}, reals \farg{alpha}, reals
-  \farg{beta}}{The log of the uniform complementary cumulative distribution 
-  function of \farg{y} given lower bound \farg{alpha} and upper bound 
+  \farg{beta}}{The log of the uniform complementary cumulative distribution
+  function of \farg{y} given lower bound \farg{alpha} and upper bound
   \farg{beta}}
 \end{description}
 %
@@ -1942,7 +2291,7 @@ If $K \in \nats$, $\mu \in \reals^K$, and $\Sigma \in \reals^{K \times
 \frac{1}{\sqrt{|\Sigma|}}
 \
 \exp \! \left( \!
-- 
+-
 \frac{1}{2}
 (y - \mu)^{\top} \, \Sigma^{-1} \, (y - \mu)
 \right)
@@ -1951,7 +2300,7 @@ If $K \in \nats$, $\mu \in \reals^K$, and $\Sigma \in \reals^{K \times
 %
 where $|\Sigma|$ is the absolute determinant of $\Sigma$.
 
-\pitem{y}{multi\_normal}{mu,Sigma}
+\pitem{y}{multi\_normal}{mu, Sigma}
 
 \subsubsection{Stan Functions}
 
@@ -1990,7 +2339,7 @@ vectorization.
 \begin{description}
 \fitem{vector}{multi\_normal\_rng}{vector \farg{mu}, matrix
   \farg{Sigma}}{Generate a multivariate normal variate with location
-  \farg{mu} and covariance matrix \farg{Sigma}; may only be used in 
+  \farg{mu} and covariance matrix \farg{Sigma}; may only be used in
 generated quantities block}
 \end{description}
 
@@ -2007,7 +2356,7 @@ If $K \in \nats$, $\mu \in \reals^K$, and $\Omega \in \reals^{K \times
 = \distro{MultiNormal}(y|\mu,\Sigma^{-1})
 \]
 
-\pitem{y}{multi\_normal\_prec}{mu,Omega}
+\pitem{y}{multi\_normal\_prec}{mu, Omega}
 
 \subsubsection{Stan Functions}
 
@@ -2051,7 +2400,7 @@ triangular and such that $LL^{\top}$ is positive definite, then for $y
 \]
 
 
-\pitem{y}{multi\_normal\_cholesky}{mu,L}
+\pitem{y}{multi\_normal\_cholesky}{mu, L}
 
 \subsubsection{Stan Functions}
 
@@ -2082,7 +2431,7 @@ triangular and such that $LL^{\top}$ is positive definite, then for $y
 \begin{description}
 \fitem{vector}{multi\_normal\_cholesky\_rng}{vector \farg{mu}, matrix
   \farg{L}}{Generate a multivariate normal variate with location
-  \farg{mu} and lower-triangular Cholesky factor of the covariance 
+  \farg{mu} and lower-triangular Cholesky factor of the covariance
   matrix \farg{L}; may only be used in generated quantities block}
 \end{description}
 
@@ -2104,7 +2453,7 @@ Gaussian Processes with multi-variate outputs where only the output dimensions
 share a kernel function but vary based on their scale.  Note that this
 function does not take into account the mean prediction.
 
-\pitem{y}{multi\_gp}{Sigma,w}
+\pitem{y}{multi\_gp}{Sigma, w}
 
 \subsubsection{Stan Functions}
 
@@ -2138,7 +2487,7 @@ parametrization in terms of Cholesky factor of the kernel matrix, this distribut
 is also more efficient than $\distro{MultiGP}()$. Note that this
 function does not take into account the mean prediction.
 
-\pitem{y}{multi\_gp\_cholesky}{L,w}
+\pitem{y}{multi\_gp\_cholesky}{L, w}
 
 \subsubsection{Stan Functions}
 
@@ -2183,7 +2532,7 @@ $y \in \reals^K$,
 \]
 \vspace*{4pt}
 
-\pitem{y}{multi\_student\_t}{nu,mu,Sigma}
+\pitem{y}{multi\_student\_t}{nu, mu, Sigma}
 
 
 \subsubsection{Stan Functions}
@@ -2215,13 +2564,12 @@ $y \in \reals^K$,
 \begin{description}
 \fitem{vector}{multi\_student\_t\_rng}{real \farg{nu}, vector \farg{mu}, matrix
   \farg{Sigma}}{Generate a multivariate Student-$t$ variate with degrees
-  of freedom \farg{nu}, location \farg{mu}, and scale matrix \farg{Sigma}; 
+  of freedom \farg{nu}, location \farg{mu}, and scale matrix \farg{Sigma};
 may only be used in generated quantities block}
 \end{description}
 
 
 \section{Gaussian Dynamic Linear Models}
-\label{sec:guass-dynam-line}
 
 A Gaussian Dynamic Linear model is defined as follows,
 For $t \in 1, \dots, T$,
@@ -2229,7 +2577,7 @@ For $t \in 1, \dots, T$,
   \begin{aligned}[t]
     y_{t} &\sim N(F' \theta_{t}, V) \\
     \theta_{t} &\sim N(G \theta_{t - 1}, W) \\
-    \theta_{0} &\sim N(m_{0}, C_{0}) 
+    \theta_{0} &\sim N(m_{0}, C_{0})
   \end{aligned}
 \]
 where $y$ is $n \times T$ matrix where rows are variables and columns
@@ -2240,7 +2588,7 @@ the Kalman Filter. If $V$ is diagonal, then a more efficient
 algorithm which sequentially processes observations and avoids a
 matrix inversions can be used \citep[Sec~6.4]{DurbinKoopman:2001}.
 
-\pitem{y}{gaussian\_dlm\_obs}{F,G,V,W,m0,C0}
+\pitem{y}{gaussian\_dlm\_obs}{F, G, V, W, m0, C0}
 
 \subsubsection{Stan Functions}
 
@@ -2261,7 +2609,7 @@ section works with either type of observation \farg{V}.
   covariance matrix \farg{V}, system covariance matrix \farg{W}, and
   the initial state is distributed normal with mean \farg{m0} and
   covariance \farg{C0}.}
-% 
+%
 %
 \fitemtwolines{real}{gaussian\_dlm\_obs\_log}{matrix \farg{y}, matrix \farg{F},
   matrix \farg{G}, vector \farg{V}}{matrix \farg{W}, vector \farg{m0},
@@ -2290,10 +2638,10 @@ $\sum_{k = 1}^K \theta_k = 1$.
 \subsubsection{Probability Density Function}
 
 If $K \in \nats$ and $\alpha \in (\posreals)^{K}$, then for
-$\theta \in \mbox{$K$-simplex}$, 
+$\theta \in \mbox{$K$-simplex}$,
 \[
 \distro{Dirichlet}(\theta|\alpha)
-= 
+=
 \frac{\Gamma \! \left( \sum_{k=1}^K \alpha_k \right)}
      {\prod_{k=1}^K \Gamma(\alpha_k)}
 \
@@ -2319,7 +2667,7 @@ strictly positive parameters, with $\alpha_i > 0$ for each $i$.
 %
 \begin{description}
 \fitem{vector}{dirichlet\_rng}{vector \farg{alpha}}{Generate a
-  Dirichlet variate with prior counts (plus one) \farg{alpha}; 
+  Dirichlet variate with prior counts (plus one) \farg{alpha};
 may only be used in generated quantities block}
 \end{description}
 
@@ -2355,7 +2703,7 @@ unit diagonal (i.e., a correlation matrix), then
 \propto \det \left( \Sigma \right)^{(\eta - 1)}.
 \]
 %
-The expectation is the identity matrix for any positive value of the 
+The expectation is the identity matrix for any positive value of the
 shape parameter $\eta$, which can be interpreted like the shape parameter
 of a symmetric beta distribution:
 %
@@ -2369,14 +2717,14 @@ of a symmetric beta distribution:
   matrix.
 \item if $\eta$ were an unknown parameter, the Jeffreys prior is
   proportional to $\sqrt{2\sum_{k=1}^{K-1}\left(
-  \psi_1\left(\eta+\frac{K-k-1}{2}\right) - 
+  \psi_1\left(\eta+\frac{K-k-1}{2}\right) -
   2\psi_1\left(2\eta+K-k-1 \right)\right)}$, where $\psi_1()$ is the
   trigamma function
 \end{itemize}
 %
 See \citep{LewandowskiKurowickaJoe:2009} for definitions. However, it
 is much better computationally to work directly with the Cholesky factor
-of $\Sigma$, so this distribution should never be explicitly used in 
+of $\Sigma$, so this distribution should never be explicitly used in
 practice.
 
 \pitem{y}{lkj\_corr}{eta}
@@ -2389,7 +2737,7 @@ practice.
     \farg{eta}}{The log of the LKJ density for the correlation matrix
     \farg{y} given nonnegative shape \farg{eta}. The only reason to
     use this density function is if you want the code to run slower
-    and consume more memory with more risk of numerical errors. 
+    and consume more memory with more risk of numerical errors.
     Use its Cholesky factor as described in the next section.}
 %
 \end{description}
@@ -2404,7 +2752,7 @@ practice.
 
 Stan provides an implicit parameterization of the LKJ correlation matrix
 density in terms of its Cholesky factor, which you should use rather
-than the explicit parameterization in the previous section. For example, 
+than the explicit parameterization in the previous section. For example,
 if \code{L} is a Cholesky factor of a correlation matrix, then
 %
 \begin{stancode}
@@ -2423,7 +2771,7 @@ Cholesky factor for a correlation matrix; for example,
 %
 \begin{stancode}
 parameters {
-  cholesky_factor_corr[K] L; 
+  cholesky_factor_corr[K] L;
   # rather than corr_matrix[K] Sigma;
   // ...
 \end{stancode}
@@ -2436,8 +2784,8 @@ For $\eta > 0$, if $L$ is the Cholesky factor of a symmetric
 positive-definite matrix with unit diagonal (i.e., a correlation
 matrix), then
 \[
-\distro{LkjCholesky}(L|\eta) 
-\propto \left|J\right|\det(L L^\top)^{(\eta - 1)} 
+\distro{LkjCholesky}(L|\eta)
+\propto \left|J\right|\det(L L^\top)^{(\eta - 1)}
 = \prod_{k=2}^K L_{kk}^{K-k+2\eta-2}.
 \]
 See the previous section for details on interpreting the shape
@@ -2461,7 +2809,7 @@ $LL^\top$ is constant iff $\eta=1$.
 \begin{description}
 \fitem{matrix}{lkj\_corr\_cholesky\_rng}{int \farg{K}, real \farg{eta}}{
   Generate a random Cholesky factor of a correlation matrix of order
-  \farg{K} that is distributed LKJ with shape \farg{eta}; may only be 
+  \farg{K} that is distributed LKJ with shape \farg{eta}; may only be
   used in generated quantities block}
 \end{description}
 
@@ -2500,14 +2848,14 @@ and positive definite, then for symmetric and positive-definite $W \in
 where $\mbox{tr}()$ is the matrix trace function, and $\Gamma_K()$ is
 the multivariate Gamma function,
 \[
-\Gamma_K(x) = 
+\Gamma_K(x) =
 \frac{1}{\pi^{K(K-1)/4}}
 \
 \prod_{k=1}^K \Gamma \left( x + \frac{1 - k}{2} \right)
 \!.
 \]
 
-\pitem{W}{wishart}{nu,Sigma}
+\pitem{W}{wishart}{nu, Sigma}
 
 \subsubsection{Stan Functions}
 
@@ -2536,7 +2884,7 @@ If $K \in \nats$, $\nu \in (K-1,\infty)$, and $S \in \reals^{K \times
 positive-definite $W \in \reals^{K \times K}$,
 \[
 \distro{InvWishart}(W|\nu,S)
-= 
+=
 \frac{1}{2^{\nu K / 2}}
 \
 \frac{1}{\Gamma_K \! \left( \frac{\nu}{2} \right)}
@@ -2545,7 +2893,7 @@ positive-definite $W \in \reals^{K \times K}$,
 \
 \left| W \right|^{-(\nu + K + 1)/2}
 \
-\exp \! \left( 
+\exp \! \left(
 - \frac{1}{2}
 \
 \mbox{tr}(SW^{-1})
@@ -2553,7 +2901,7 @@ positive-definite $W \in \reals^{K \times K}$,
 \! .
 \]
 
-\pitem{W}{inv\_wishart}{nu,Sigma}
+\pitem{W}{inv\_wishart}{nu, Sigma}
 
 \subsubsection{Stan Functions}
 
@@ -2568,7 +2916,7 @@ positive-definite $W \in \reals^{K \times K}$,
 %
 \begin{description}
 \fitem{matrix}{inv\_wishart\_rng}{real \farg{nu}, matrix
-  \farg{Sigma}}{Generate an inverse Wishart variate with degrees of 
+  \farg{Sigma}}{Generate an inverse Wishart variate with degrees of
 freedom \farg{nu} and symmetric and positive-definite scale matrix
  \farg{Sigma}; may only be used in generated quantities block}
 \end{description}

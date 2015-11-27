@@ -1,11 +1,15 @@
 language: cpp
 
+sudo: false
+
 os:
   - linux
-  - os
+  - osx
   
 compiler:
   - clang
+
+before_install: make math-revert
 
 before_script: echo "CC=$CXX" > make/local
 
@@ -13,17 +17,13 @@ matrix:
   fast_finish: true
 
 env:
-  - TESTFOLDER=src/test/unit/interface
-  - TESTFOLDER=src/test/unit/io
-  - TESTFOLDER=src/test/unit/lang
-  - TESTFOLDER=src/test/unit/math/prim
-  - TESTFOLDER=src/test/unit/math/rev
-  - TESTFOLDER=src/test/unit/math/fwd
- # - TESTFOLDER=src/test/unit/math/mix  ## commenting this out due to segfault on travis
-  - TESTFOLDER=src/test/unit/mcmc
-  - TESTFOLDER=src/test/unit/memory
-  - TESTFOLDER=src/test/unit/model
-  - TESTFOLDER=src/test/unit/optimization
-  - TESTFOLDER=src/test/unit/services
+  -  TESTFOLDER=src/test/unit/interface_callbacks
+  -  TESTFOLDER=src/test/unit/io
+  -  TESTFOLDER=src/test/unit/lang
+  -  TESTFOLDER=src/test/unit/mcmc
+  -  TESTFOLDER=src/test/unit/model
+  -  TESTFOLDER=src/test/unit/optimization
+  -  TESTFOLDER=src/test/unit/services
+  -  TESTFOLDER=src/test/unit/variational
 
 script: ./runTests.py $TESTFOLDER
